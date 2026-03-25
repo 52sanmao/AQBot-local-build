@@ -667,21 +667,25 @@ impl ProviderAdapter for OpenAIResponsesAdapter {
             .await
             .map_err(|e| AQBotError::Provider(format!("Parse error: {e}")))?;
 
-        let chat_prefixes = ["gpt-", "o1-", "o3-", "o4-", "chatgpt-"];
-
         Ok(models
             .data
             .into_iter()
-            .filter(|m| chat_prefixes.iter().any(|p| m.id.starts_with(p)))
             .map(|m| {
-                let mut caps = vec![ModelCapability::TextChat];
-                if m.id.contains("gpt-4o") || m.id.contains("gpt-4-turbo") {
+                let model_type = ModelType::detect(&m.id);
+                let mut caps = match model_type {
+                    ModelType::Chat => vec![ModelCapability::TextChat],
+                    ModelType::Embedding => vec![],
+                    ModelType::Voice => vec![ModelCapability::RealtimeVoice],
+                };
+                let id_lower = m.id.to_lowercase();
+                if id_lower.contains("gpt-4o") || id_lower.contains("gpt-4-turbo")
+                    || id_lower.contains("claude") || id_lower.contains("vision")
+                {
                     caps.push(ModelCapability::Vision);
                 }
-                if m.id.starts_with("o1") || m.id.starts_with("o3") || m.id.starts_with("o4") {
+                if id_lower.starts_with("o1") || id_lower.starts_with("o3") || id_lower.starts_with("o4") {
                     caps.push(ModelCapability::Reasoning);
                 }
-                let model_type = ModelType::detect(&m.id);
                 Model {
                     provider_id: ctx.provider_id.clone(),
                     model_id: m.id.clone(),

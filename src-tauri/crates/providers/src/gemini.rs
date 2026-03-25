@@ -658,12 +658,6 @@ impl ProviderAdapter for GeminiAdapter {
             .models
             .unwrap_or_default()
             .into_iter()
-            .filter(|m| {
-                m.supported_generation_methods
-                    .as_ref()
-                    .map(|methods| methods.iter().any(|method| method == "generateContent"))
-                    .unwrap_or(false)
-            })
             .map(|m| {
                 let model_id = m
                     .name
@@ -671,7 +665,12 @@ impl ProviderAdapter for GeminiAdapter {
                     .unwrap_or(&m.name)
                     .to_string();
                 let name = m.display_name.unwrap_or_else(|| model_id.clone());
-                let mut caps = vec![ModelCapability::TextChat];
+                let model_type = ModelType::detect(&model_id);
+                let mut caps = match model_type {
+                    ModelType::Chat => vec![ModelCapability::TextChat],
+                    ModelType::Embedding => vec![],
+                    ModelType::Voice => vec![ModelCapability::RealtimeVoice],
+                };
                 if model_id.contains("pro") || model_id.contains("flash") {
                     caps.push(ModelCapability::Vision);
                 }
@@ -680,7 +679,7 @@ impl ProviderAdapter for GeminiAdapter {
                     model_id: model_id.clone(),
                     name,
                     group_name: None,
-                    model_type: ModelType::detect(&model_id),
+                    model_type,
                     capabilities: caps,
                     max_tokens: None,
                     enabled: true,

@@ -106,6 +106,17 @@ struct AnthropicUsage {
     output_tokens: u32,
 }
 
+#[derive(Deserialize)]
+struct AnthropicModelsResponse {
+    data: Vec<AnthropicModelInfo>,
+}
+
+#[derive(Deserialize)]
+struct AnthropicModelInfo {
+    id: String,
+    display_name: Option<String>,
+}
+
 /// Separate system messages from conversation messages and convert to Anthropic format.
 fn extract_text_content(content: &ChatContent) -> String {
     match content {
@@ -630,77 +641,61 @@ impl ProviderAdapter for AnthropicAdapter {
     }
 
     async fn list_models(&self, ctx: &ProviderRequestContext) -> Result<Vec<Model>> {
-        // Anthropic has no public models endpoint; return a hardcoded list.
-        let pid = &ctx.provider_id;
-        Ok(vec![
-            Model {
-                provider_id: pid.clone(),
-                model_id: "claude-sonnet-4-20250514".into(),
-                name: "Claude Sonnet 4".into(),
-                group_name: None,
-                model_type: ModelType::Chat,
-                capabilities: vec![
-                    ModelCapability::TextChat,
-                    ModelCapability::Vision,
-                    ModelCapability::Reasoning,
-                ],
-                max_tokens: Some(8192),
-                enabled: true,
-                param_overrides: None,
-            },
-            Model {
-                provider_id: pid.clone(),
-                model_id: "claude-3-7-sonnet-20250219".into(),
-                name: "Claude 3.7 Sonnet".into(),
-                group_name: None,
-                model_type: ModelType::Chat,
-                capabilities: vec![
-                    ModelCapability::TextChat,
-                    ModelCapability::Vision,
-                    ModelCapability::Reasoning,
-                ],
-                max_tokens: Some(8192),
-                enabled: true,
-                param_overrides: None,
-            },
-            Model {
-                provider_id: pid.clone(),
-                model_id: "claude-3-5-sonnet-20241022".into(),
-                name: "Claude 3.5 Sonnet".into(),
-                group_name: None,
-                model_type: ModelType::Chat,
-                capabilities: vec![ModelCapability::TextChat, ModelCapability::Vision],
-                max_tokens: Some(8192),
-                enabled: true,
-                param_overrides: None,
-            },
-            Model {
-                provider_id: pid.clone(),
-                model_id: "claude-3-5-haiku-20241022".into(),
-                name: "Claude 3.5 Haiku".into(),
-                group_name: None,
-                model_type: ModelType::Chat,
-                capabilities: vec![ModelCapability::TextChat],
-                max_tokens: Some(8192),
-                enabled: true,
-                param_overrides: None,
-            },
-            Model {
-                provider_id: pid.clone(),
-                model_id: "claude-3-opus-20240229".into(),
-                name: "Claude 3 Opus".into(),
-                group_name: None,
-                model_type: ModelType::Chat,
-                capabilities: vec![
-                    ModelCapability::TextChat,
-                    ModelCapability::Vision,
-                    ModelCapability::Reasoning,
-                ],
-                max_tokens: Some(4096),
-                enabled: true,
-                param_overrides: None,
-            },
-        ])
+        let url = format!("{}/models", Self::base_url(ctx));
+
+        let resp = self
+            .get_client(ctx)?
+            .get(&url)
+            .header("x-api-key", &ctx.api_key)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .send()
+            .await
+            .map_err(|e| AQBotError::Provider(format!("Request failed: {e}")))?;
+
+        if !resp.status().is_success() {
+            let s = resp.status();
+            let t = resp.text().await.unwrap_or_default();
+            return Err(AQBotError::Provider(format!("Anthropic API error {s}: {t}")));
+        }
+
+        let models: AnthropicModelsResponse = resp
+            .json()
+            .await
+            .map_err(|e| AQBotError::Provider(format!("Parse error: {e}")))?;
+
+        Ok(models
+            .data
+            .into_iter()
+            .map(|m| {
+                let model_type = ModelType::detect(&m.id);
+                let mut caps = match model_type {
+                    ModelType::Chat => vec![ModelCapability::TextChat],
+                    ModelType::Embedding => vec![],
+                    ModelType::Voice => vec![ModelCapability::RealtimeVoice],
+                };
+                let id_lower = m.id.to_lowercase();
+                if id_lower.contains("claude") && !id_lower.contains("haiku") {
+                    caps.push(ModelCapability::Vision);
+                }
+                if id_lower.contains("opus") || id_lower.contains("sonnet-4")
+                    || id_lower.contains("3-7") || id_lower.contains("3.7")
+                {
+                    caps.push(ModelCapability::Reasoning);
+                }
+                let name = m.display_name.unwrap_or_else(|| m.id.clone());
+                Model {
+                    provider_id: ctx.provider_id.clone(),
+                    model_id: m.id,
+                    name,
+                    group_name: None,
+                    model_type,
+                    capabilities: caps,
+                    max_tokens: None,
+                    enabled: true,
+                    param_overrides: None,
+                }
+            })
+            .collect())
     }
 
     async fn embed(&self, _ctx: &ProviderRequestContext, _request: EmbedRequest) -> Result<EmbedResponse> {
