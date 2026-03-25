@@ -1,6 +1,6 @@
 import { Button, Input, Modal, Form, Select, Switch, App, theme } from 'antd';
-import { Plus, Search, GripVertical } from 'lucide-react';
-import { ProviderIcon } from '@lobehub/icons';
+import { Plus, Search, GripVertical, RotateCcw } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { useMemo, useState } from 'react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,18 +19,19 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useProviderStore, useUIStore } from '@/stores';
-import { getProviderIconKey } from '@/lib/providerIcons';
+import { SmartProviderIcon } from '@/lib/providerIcons';
 import type { ProviderConfig, ProviderType } from '@/types';
 
 const PROVIDER_TYPE_OPTIONS: { label: string; value: ProviderType }[] = [
   { label: 'OpenAI', value: 'openai' },
+  { label: 'OpenAI Responses', value: 'openai_responses' },
   { label: 'Anthropic', value: 'anthropic' },
   { label: 'Gemini', value: 'gemini' },
-  { label: 'Custom', value: 'custom' },
 ];
 
 const DEFAULT_HOSTS: Record<ProviderType, string> = {
   openai: 'https://api.openai.com',
+  openai_responses: 'https://api.openai.com',
   anthropic: 'https://api.anthropic.com',
   gemini: 'https://generativelanguage.googleapis.com',
   custom: '',
@@ -98,7 +99,7 @@ function SortableProviderItem({
         className="min-w-0 flex-1 flex items-center gap-2"
         style={{ opacity: disabled ? 0.4 : 1 }}
       >
-        <ProviderIcon provider={getProviderIconKey(provider)} size={22} type="color" />
+        <SmartProviderIcon provider={provider} size={22} type="color" />
         <span style={{ color: isSelected ? token.colorPrimary : undefined }}>{provider.name}</span>
       </div>
       <Switch
@@ -135,7 +136,9 @@ export function ProviderList() {
 
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [initLoading, setInitLoading] = useState(false);
   const [form] = Form.useForm();
+  const fetchProviders = useProviderStore((s) => s.fetchProviders);
 
   const filteredProviders = useMemo(
     () =>
@@ -167,6 +170,29 @@ export function ProviderList() {
     form.setFieldValue('api_host', DEFAULT_HOSTS[type]);
   };
 
+  const [initModalOpen, setInitModalOpen] = useState(false);
+
+  const handleInitProviders = async (overwrite: boolean) => {
+    setInitLoading(true);
+    setInitModalOpen(false);
+    try {
+      const result = await invoke<{ added: string[]; updated: string[]; skipped: string[] }>(
+        'initialize_providers',
+        { overwrite },
+      );
+      await fetchProviders();
+      const parts: string[] = [];
+      if (result.added.length) parts.push(t('settings.initAdded', { names: result.added.join(', ') }));
+      if (result.updated.length) parts.push(t('settings.initUpdated', { names: result.updated.join(', ') }));
+      if (result.skipped.length) parts.push(t('settings.initSkipped', { names: result.skipped.join(', ') }));
+      message.success(parts.join('；') || t('settings.initNone'));
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setInitLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       <div className="p-3 flex items-center gap-2">
@@ -177,6 +203,13 @@ export function ProviderList() {
           onChange={(e) => setSearch(e.target.value)}
           allowClear
           style={{ flex: 1 }}
+        />
+        <Button
+          type="default"
+          icon={<RotateCcw size={16} />}
+          onClick={() => setInitModalOpen(true)}
+          loading={initLoading}
+          style={{ flexShrink: 0 }}
         />
         <Button
           type="default"
@@ -254,6 +287,26 @@ export function ProviderList() {
             <Input placeholder="https://api.openai.com" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={t('settings.initProviders')}
+        open={initModalOpen}
+        onCancel={() => setInitModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setInitModalOpen(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button key="add" type="default" onClick={() => handleInitProviders(false)}>
+            {t('settings.initAddOnly')}
+          </Button>,
+          <Button key="overwrite" type="primary" danger onClick={() => handleInitProviders(true)}>
+            {t('settings.initOverwrite')}
+          </Button>,
+        ]}
+      >
+        <p>{t('settings.initProvidersDesc')}</p>
+        <p style={{ marginTop: 8, fontSize: 12, opacity: 0.65 }}>{t('settings.initOverwriteHint')}</p>
       </Modal>
     </div>
   );

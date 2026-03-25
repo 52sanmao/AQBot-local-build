@@ -58,7 +58,7 @@ const BUILT_IN_PROVIDERS = [
   {
     id: 'builtin-openai-responses',
     name: 'OpenAI Responses',
-    provider_type: 'openai',
+    provider_type: 'openai_responses',
     api_host: 'https://api.openai.com',
     api_path: null,
     enabled: true,
@@ -112,7 +112,7 @@ const BUILT_IN_PROVIDERS = [
   {
     id: 'builtin-deepseek',
     name: 'DeepSeek',
-    provider_type: 'custom',
+    provider_type: 'openai',
     api_host: 'https://api.deepseek.com',
     api_path: null,
     enabled: true,
@@ -129,7 +129,7 @@ const BUILT_IN_PROVIDERS = [
   {
     id: 'builtin-xai',
     name: 'xAI',
-    provider_type: 'custom',
+    provider_type: 'openai',
     api_host: 'https://api.x.ai',
     api_path: null,
     enabled: true,
@@ -146,7 +146,7 @@ const BUILT_IN_PROVIDERS = [
   {
     id: 'builtin-glm',
     name: 'GLM',
-    provider_type: 'custom',
+    provider_type: 'openai',
     api_host: 'https://open.bigmodel.cn/api/paas',
     api_path: null,
     enabled: true,
@@ -163,8 +163,8 @@ const BUILT_IN_PROVIDERS = [
   {
     id: 'builtin-minimax',
     name: 'MiniMax',
-    provider_type: 'custom',
-    api_host: 'https://api.minimax.chat',
+    provider_type: 'openai',
+    api_host: 'https://api.minimaxi.com',
     api_path: null,
     enabled: true,
     models: [

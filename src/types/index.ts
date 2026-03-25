@@ -1,5 +1,5 @@
 // === Provider System ===
-export type ProviderType = 'openai' | 'anthropic' | 'gemini' | 'custom';
+export type ProviderType = 'openai' | 'openai_responses' | 'anthropic' | 'gemini' | 'custom';
 
 export interface ProviderConfig {
   id: string;

@@ -22,6 +22,8 @@ pub struct ProviderConfig {
 #[serde(rename_all = "lowercase")]
 pub enum ProviderType {
     OpenAI,
+    #[serde(rename = "openai_responses")]
+    OpenAIResponses,
     Anthropic,
     Gemini,
     Custom,
@@ -85,6 +87,7 @@ pub struct CreateProviderInput {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateProviderInput {
     pub name: Option<String>,
+    pub provider_type: Option<ProviderType>,
     pub api_host: Option<String>,
     pub api_path: Option<Option<String>>,
     pub enabled: Option<bool>,

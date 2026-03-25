@@ -40,24 +40,17 @@ pub async fn create_pool(db_path: &str) -> Result<DbHandle> {
     Ok(DbHandle { conn })
 }
 
-async fn seed_builtin_providers(db: &DatabaseConnection) -> Result<()> {
-    let existing = provider::list_providers(db).await?;
-    if !existing.is_empty() {
-        return Ok(());
-    }
+pub struct BuiltinProvider {
+    pub name: &'static str,
+    pub provider_type: ProviderType,
+    pub api_host: &'static str,
+    pub models: Vec<(&'static str, &'static str, Vec<ModelCapability>, Option<u32>)>,
+}
 
-    info!("Seeding built-in providers...");
-
+pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
     use ModelCapability::*;
 
-    struct BuiltinProvider {
-        name: &'static str,
-        provider_type: ProviderType,
-        api_host: &'static str,
-        models: Vec<(&'static str, &'static str, Vec<ModelCapability>, Option<u32>)>,
-    }
-
-    let builtins = vec![
+    vec![
         BuiltinProvider {
             name: "OpenAI",
             provider_type: ProviderType::OpenAI,
@@ -71,7 +64,7 @@ async fn seed_builtin_providers(db: &DatabaseConnection) -> Result<()> {
         },
         BuiltinProvider {
             name: "OpenAI Responses",
-            provider_type: ProviderType::OpenAI,
+            provider_type: ProviderType::OpenAIResponses,
             api_host: "https://api.openai.com",
             models: vec![
                 ("gpt-4o", "GPT-4o", vec![TextChat, Vision, FunctionCalling], Some(128000)),
@@ -101,7 +94,7 @@ async fn seed_builtin_providers(db: &DatabaseConnection) -> Result<()> {
         },
         BuiltinProvider {
             name: "DeepSeek",
-            provider_type: ProviderType::Custom,
+            provider_type: ProviderType::OpenAI,
             api_host: "https://api.deepseek.com",
             models: vec![
                 ("deepseek-chat", "DeepSeek Chat", vec![TextChat, FunctionCalling], Some(65536)),
@@ -110,7 +103,7 @@ async fn seed_builtin_providers(db: &DatabaseConnection) -> Result<()> {
         },
         BuiltinProvider {
             name: "xAI",
-            provider_type: ProviderType::Custom,
+            provider_type: ProviderType::OpenAI,
             api_host: "https://api.x.ai",
             models: vec![
                 ("grok-3", "Grok 3", vec![TextChat, FunctionCalling], Some(131072)),
@@ -119,7 +112,7 @@ async fn seed_builtin_providers(db: &DatabaseConnection) -> Result<()> {
         },
         BuiltinProvider {
             name: "GLM",
-            provider_type: ProviderType::Custom,
+            provider_type: ProviderType::OpenAI,
             api_host: "https://open.bigmodel.cn/api/paas",
             models: vec![
                 ("glm-4-plus", "GLM-4 Plus", vec![TextChat, FunctionCalling], Some(128000)),
@@ -128,14 +121,25 @@ async fn seed_builtin_providers(db: &DatabaseConnection) -> Result<()> {
         },
         BuiltinProvider {
             name: "MiniMax",
-            provider_type: ProviderType::Custom,
-            api_host: "https://api.minimax.chat",
+            provider_type: ProviderType::OpenAI,
+            api_host: "https://api.minimaxi.com",
             models: vec![
                 ("MiniMax-M1", "MiniMax-M1", vec![TextChat, Reasoning, FunctionCalling], Some(1000000)),
                 ("MiniMax-S1", "MiniMax-S1", vec![TextChat, FunctionCalling], Some(1000000)),
             ],
         },
-    ];
+    ]
+}
+
+async fn seed_builtin_providers(db: &DatabaseConnection) -> Result<()> {
+    let existing = provider::list_providers(db).await?;
+    if !existing.is_empty() {
+        return Ok(());
+    }
+
+    info!("Seeding built-in providers...");
+
+    let builtins = get_builtin_providers();
 
     for (idx, bp) in builtins.into_iter().enumerate() {
         let prov = provider::create_provider(

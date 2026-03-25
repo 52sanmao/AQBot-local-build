@@ -609,6 +609,7 @@ pub(crate) fn resolve_provider_for_model(
 pub(crate) fn provider_type_to_str(pt: &ProviderType) -> &'static str {
     match pt {
         ProviderType::OpenAI => "openai",
+        ProviderType::OpenAIResponses => "openai_responses",
         ProviderType::Anthropic => "anthropic",
         ProviderType::Gemini => "gemini",
         ProviderType::Custom => "openai", // custom providers use OpenAI-compatible API

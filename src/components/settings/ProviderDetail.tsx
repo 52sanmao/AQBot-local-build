@@ -5,14 +5,17 @@ import {
   Checkbox,
   Collapse,
   Divider,
+  Dropdown,
   Form,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
+  Popover,
   Select,
   Slider,
   Space,
+  Spin,
   Switch,
   Tag,
   Tooltip,
@@ -21,11 +24,11 @@ import {
   theme,
 } from 'antd';
 import { Maximize2, Mic, Lightbulb, Copy, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp } from 'lucide-react';
-import { ProviderIcon, ModelIcon } from '@lobehub/icons';
+import { ModelIcon } from '@lobehub/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProviderStore, useUIStore } from '@/stores';
-import { getProviderIconKey } from '@/lib/providerIcons';
+import { SmartProviderIcon } from '@/lib/providerIcons';
 import { getEditableCapabilities, getVisibleModelCapabilities, sanitizeModelCapabilities } from '@/lib/modelCapabilities';
 import IconPickerModal from './IconPickerModal';
 import type { Model, ModelCapability, ModelType, ModelParamOverrides, ProviderType } from '@/types';
@@ -64,6 +67,7 @@ const MODEL_TYPE_CONFIG: Record<ModelType, { label: string; color: string; icon:
 
 const DEFAULT_PATHS: Record<ProviderType, string> = {
   openai: '/v1/chat/completions',
+  openai_responses: '/v1/responses',
   anthropic: '/v1/messages',
   gemini: '/v1beta/models',
   custom: '/v1/chat/completions',
@@ -71,6 +75,7 @@ const DEFAULT_PATHS: Record<ProviderType, string> = {
 
 const DEFAULT_HOSTS: Record<ProviderType, string> = {
   openai: 'https://api.openai.com',
+  openai_responses: 'https://api.openai.com',
   anthropic: 'https://api.anthropic.com',
   gemini: 'https://generativelanguage.googleapis.com',
   custom: '',
@@ -128,6 +133,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const updateModelParams = useProviderStore((s) => s.updateModelParams);
   const fetchRemoteModels = useProviderStore((s) => s.fetchRemoteModels);
   const saveModels = useProviderStore((s) => s.saveModels);
+  const testModel = useProviderStore((s) => s.testModel);
 
   const [addKeyModal, setAddKeyModal] = useState(false);
   const [keyValue, setKeyValue] = useState('');
@@ -153,6 +159,12 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [apiPathLocal, setApiPathLocal] = useState(provider?.api_path ?? '');
   const apiHostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const apiPathTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [testingModels, setTestingModels] = useState<Set<string>>(new Set());
+  const [testResults, setTestResults] = useState<Map<string, { latencyMs?: number; error?: string }>>(new Map());
+  const [singleTestModalOpen, setSingleTestModalOpen] = useState(false);
+  const [singleTestModelId, setSingleTestModelId] = useState<string>('');
+  const [singleTestResult, setSingleTestResult] = useState<{ latencyMs?: number; error?: string } | null>(null);
+  const [singleTestLoading, setSingleTestLoading] = useState(false);
 
   // Sync local state when provider changes (e.g. switching providers)
   useEffect(() => {
@@ -258,6 +270,57 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       setRefreshing(false);
     }
   }, [providerId, fetchRemoteModels, saveModels, message, t]);
+
+  const handleTestSingleModel = useCallback(async () => {
+    if (!singleTestModelId) return;
+    setSingleTestLoading(true);
+    setSingleTestResult(null);
+    try {
+      const latencyMs = await testModel(providerId, singleTestModelId);
+      setSingleTestResult({ latencyMs });
+    } catch (e) {
+      setSingleTestResult({ error: String(e) });
+    } finally {
+      setSingleTestLoading(false);
+    }
+  }, [providerId, singleTestModelId, testModel]);
+
+  const handleTestInlineModel = useCallback(async (modelId: string) => {
+    setTestingModels((prev) => new Set(prev).add(modelId));
+    try {
+      const latencyMs = await testModel(providerId, modelId);
+      setTestResults((prev) => new Map(prev).set(modelId, { latencyMs }));
+    } catch (e) {
+      setTestResults((prev) => new Map(prev).set(modelId, { error: String(e) }));
+    } finally {
+      setTestingModels((prev) => {
+        const next = new Set(prev);
+        next.delete(modelId);
+        return next;
+      });
+    }
+  }, [providerId, testModel]);
+
+  const handleTestAllModels = useCallback(async () => {
+    const models = provider?.models ?? [];
+    if (models.length === 0) return;
+    setTestResults(new Map());
+    setTestingModels(new Set(models.map((m) => m.model_id)));
+    for (const model of models) {
+      try {
+        const latencyMs = await testModel(providerId, model.model_id);
+        setTestResults((prev) => new Map(prev).set(model.model_id, { latencyMs }));
+      } catch (e) {
+        setTestResults((prev) => new Map(prev).set(model.model_id, { error: String(e) }));
+      } finally {
+        setTestingModels((prev) => {
+          const next = new Set(prev);
+          next.delete(model.model_id);
+          return next;
+        });
+      }
+    }
+  }, [provider?.models, providerId, testModel]);
 
   const handleAddModel = useCallback(async () => {
     const nextModelId = addModelId.trim();
@@ -394,13 +457,13 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <ProviderIcon provider={getProviderIconKey(provider)} size={40} type="avatar" shape="square" />
+          <SmartProviderIcon provider={provider} size={40} type="avatar" shape="square" />
           <div>
             <div className="flex items-center gap-2">
               <Title level={4} className="!mb-0">
                 {provider.name}
               </Title>
-              <Text type="secondary" className="text-sm">({provider.provider_type})</Text>
+              <Text type="secondary" className="text-sm">({t('settings.endpointFormat')}：{provider.provider_type === 'openai' ? 'OpenAI' : provider.provider_type === 'openai_responses' ? 'OpenAI Responses' : provider.provider_type === 'anthropic' ? 'Anthropic' : provider.provider_type === 'gemini' ? 'Gemini' : provider.provider_type})</Text>
             </div>
           </div>
         </div>
@@ -584,14 +647,29 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                   onClick={() => handleOpenAddModel()}
                 />
               </Tooltip>
-              <Tooltip title={t('settings.testModels')}>
-                <Button
-                  type="text"
-                size="small"
-                icon={<Heart size={14} />}
-                onClick={() => message.info(t('common.comingSoon'))}
-              />
-            </Tooltip>
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'single', label: t('settings.testSingleModel') },
+                    { key: 'all', label: t('settings.testAllModels') },
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === 'single') {
+                      setSingleTestModelId('');
+                      setSingleTestResult(null);
+                      setSingleTestLoading(false);
+                      setSingleTestModalOpen(true);
+                    } else {
+                      handleTestAllModels();
+                    }
+                  },
+                }}
+                trigger={['click']}
+              >
+                <Tooltip title={t('settings.testModels')}>
+                  <Button type="text" size="small" icon={<Heart size={14} />} />
+                </Tooltip>
+              </Dropdown>
             <Tooltip title={allExpanded ? t('common.collapseAll') : t('common.expandAll')}>
               <Button
                 type="text"
@@ -701,6 +779,30 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                             </div>
                           </div>
                           <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                            {testingModels.has(model.model_id) && (
+                              <Spin size="small" />
+                            )}
+                            {!testingModels.has(model.model_id) && testResults.has(model.model_id) && (() => {
+                              const result = testResults.get(model.model_id)!;
+                              if (result.latencyMs != null) {
+                                return (
+                                  <span style={{ fontSize: 11, color: token.colorSuccess }}>
+                                    {(result.latencyMs / 1000).toFixed(1)}s
+                                  </span>
+                                );
+                              }
+                              return (
+                                <Popover
+                                  content={<div style={{ maxWidth: 300, wordBreak: 'break-all' }}>{result.error}</div>}
+                                  title={t('common.errorDetail')}
+                                  trigger="click"
+                                >
+                                  <span style={{ fontSize: 11, color: token.colorError, cursor: 'pointer' }}>
+                                    {t('common.failed')}
+                                  </span>
+                                </Popover>
+                              );
+                            })()}
                             <Switch
                               size="small"
                               checked={model.enabled}
@@ -714,6 +816,15 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                               icon={<Settings size={14} />}
                               onClick={() => handleOpenSettings(model)}
                             />
+                            <Tooltip title={t('settings.testModels')}>
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<Heart size={14} />}
+                                loading={testingModels.has(model.model_id)}
+                                onClick={() => handleTestInlineModel(model.model_id)}
+                              />
+                            </Tooltip>
                             <Popconfirm
                               title={t('settings.removeModelConfirm')}
                               onConfirm={() => handleRemoveModel(model.model_id)}
@@ -1021,6 +1132,59 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
           }
         }}
       />
+
+      {/* Single Model Test Modal */}
+      <Modal
+        title={t('settings.testSingleModel')}
+        open={singleTestModalOpen}
+        onCancel={() => setSingleTestModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setSingleTestModalOpen(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="test"
+            type="primary"
+            loading={singleTestLoading}
+            disabled={!singleTestModelId}
+            onClick={handleTestSingleModel}
+          >
+            {t('settings.startTest')}
+          </Button>,
+        ]}
+      >
+        <Form layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item label={t('settings.selectModel')}>
+            <Select
+              showSearch
+              value={singleTestModelId || undefined}
+              onChange={setSingleTestModelId}
+              placeholder={t('settings.selectModel')}
+              optionFilterProp="label"
+              options={(provider?.models ?? []).map((m) => ({
+                label: m.name || m.model_id,
+                value: m.model_id,
+              }))}
+            />
+          </Form.Item>
+        </Form>
+        {singleTestResult && (
+          <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, background: token.colorBgLayout }}>
+            {singleTestResult.latencyMs != null ? (
+              <span style={{ color: token.colorSuccess }}>
+                ✓ {t('settings.testSuccess')} — {(singleTestResult.latencyMs / 1000).toFixed(2)}s
+              </span>
+            ) : (
+              <div>
+                <span style={{ color: token.colorError }}>✗ {t('common.failed')}</span>
+                <div style={{ marginTop: 4, fontSize: 12, color: token.colorTextSecondary, wordBreak: 'break-all' }}>
+                  {singleTestResult.error}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

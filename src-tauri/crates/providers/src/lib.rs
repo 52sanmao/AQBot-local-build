@@ -1,6 +1,7 @@
 pub mod adapter;
 pub mod registry;
 pub mod openai;
+pub mod openai_responses;
 pub mod anthropic;
 pub mod gemini;
 

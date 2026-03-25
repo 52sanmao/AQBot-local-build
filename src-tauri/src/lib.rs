@@ -66,7 +66,9 @@ pub fn run() {
             commands::providers::toggle_model,
             commands::providers::update_model_params,
             commands::providers::fetch_remote_models,
+            commands::providers::test_model,
             commands::providers::reorder_providers,
+            commands::providers::initialize_providers,
             // conversations
             commands::conversations::list_conversations,
             commands::conversations::create_conversation,

@@ -8,6 +8,7 @@ use tauri::{Emitter, State};
 fn provider_type_to_registry_key(pt: &ProviderType) -> &'static str {
     match pt {
         ProviderType::OpenAI => "openai",
+        ProviderType::OpenAIResponses => "openai_responses",
         ProviderType::Anthropic => "anthropic",
         ProviderType::Gemini => "gemini",
         ProviderType::Custom => "openai", // Custom providers use OpenAI-compatible API

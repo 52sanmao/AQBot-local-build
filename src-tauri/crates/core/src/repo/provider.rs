@@ -9,6 +9,7 @@ use crate::utils::{gen_id, now_ts};
 fn parse_provider_type(s: &str) -> ProviderType {
     match s {
         "openai" => ProviderType::OpenAI,
+        "openai_responses" => ProviderType::OpenAIResponses,
         "anthropic" => ProviderType::Anthropic,
         "gemini" => ProviderType::Gemini,
         _ => ProviderType::Custom,
@@ -18,6 +19,7 @@ fn parse_provider_type(s: &str) -> ProviderType {
 fn provider_type_str(pt: &ProviderType) -> &'static str {
     match pt {
         ProviderType::OpenAI => "openai",
+        ProviderType::OpenAIResponses => "openai_responses",
         ProviderType::Anthropic => "anthropic",
         ProviderType::Gemini => "gemini",
         ProviderType::Custom => "custom",
@@ -143,6 +145,7 @@ pub async fn update_provider(
     let name = input.name.unwrap_or(existing.name);
     let api_host = input.api_host.unwrap_or(existing.api_host);
     let enabled = input.enabled.unwrap_or(existing.enabled);
+    let provider_type = input.provider_type.unwrap_or(existing.provider_type);
     let proxy_json = match input.proxy_config {
         Some(ref pc) => Some(serde_json::to_string(pc).unwrap()),
         None => existing
@@ -158,6 +161,7 @@ pub async fn update_provider(
     let mut am: providers::ActiveModel = row.into();
     am.name = Set(name);
     am.api_host = Set(api_host);
+    am.provider_type = Set(provider_type_str(&provider_type).to_string());
     am.enabled = Set(if enabled { 1 } else { 0 });
     am.proxy_config = Set(proxy_json);
     if let Some(api_path) = input.api_path {

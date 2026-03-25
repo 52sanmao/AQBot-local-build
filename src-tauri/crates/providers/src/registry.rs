@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::anthropic::AnthropicAdapter;
 use crate::gemini::GeminiAdapter;
 use crate::openai::OpenAIAdapter;
+use crate::openai_responses::OpenAIResponsesAdapter;
 use crate::ProviderAdapter;
 
 pub struct ProviderRegistry {
@@ -28,6 +29,7 @@ impl ProviderRegistry {
     pub fn create_default() -> Self {
         let mut registry = Self::new();
         registry.register("openai", Box::new(OpenAIAdapter::new()));
+        registry.register("openai_responses", Box::new(OpenAIResponsesAdapter::new()));
         registry.register("anthropic", Box::new(AnthropicAdapter::new()));
         registry.register("gemini", Box::new(GeminiAdapter::new()));
         registry

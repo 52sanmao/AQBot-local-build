@@ -27,6 +27,7 @@ interface ProviderState {
   toggleModel: (providerId: string, modelId: string, enabled: boolean) => Promise<Model>;
   updateModelParams: (providerId: string, modelId: string, overrides: ModelParamOverrides) => Promise<Model>;
   fetchRemoteModels: (providerId: string) => Promise<Model[]>;
+  testModel: (providerId: string, modelId: string) => Promise<number>;
 }
 
 export const useProviderStore = create<ProviderState>((set) => ({
@@ -244,5 +245,9 @@ export const useProviderStore = create<ProviderState>((set) => ({
       set({ error: String(e) });
       throw e;
     }
+  },
+
+  testModel: async (providerId, modelId) => {
+    return await invoke<number>('test_model', { providerId, modelId });
   },
 }));

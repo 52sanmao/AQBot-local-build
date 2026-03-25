@@ -32,6 +32,7 @@ pub fn parse_embedding_provider(embedding_provider: &str) -> Result<(String, Str
 fn provider_type_to_registry_key(pt: &ProviderType) -> &'static str {
     match pt {
         ProviderType::OpenAI => "openai",
+        ProviderType::OpenAIResponses => "openai_responses",
         ProviderType::Anthropic => "anthropic",
         ProviderType::Gemini => "gemini",
         ProviderType::Custom => "openai",

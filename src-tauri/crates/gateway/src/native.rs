@@ -52,7 +52,7 @@ impl NativeProtocol {
     fn matches_provider_type(self, provider_type: &ProviderType) -> bool {
         match self {
             NativeProtocol::OpenAiResponses => {
-                matches!(provider_type, &ProviderType::OpenAI | &ProviderType::Custom)
+                matches!(provider_type, &ProviderType::OpenAI | &ProviderType::OpenAIResponses | &ProviderType::Custom)
             }
             NativeProtocol::AnthropicMessages | NativeProtocol::AnthropicCountTokens => {
                 matches!(provider_type, &ProviderType::Anthropic)
