@@ -213,7 +213,7 @@ pub async fn discover_tools_sse(endpoint: &str) -> Result<Vec<DiscoveredTool>> {
         "params": {}
     });
     let response = sse_send_request(endpoint, request).await?;
-    tracing::debug!("SSE tools/list response: {}", serde_json::to_string_pretty(&response).unwrap_or_default());
+    tracing::info!("SSE tools/list response: {}", serde_json::to_string_pretty(&response).unwrap_or_default());
     let result = response.get("result")
         .ok_or_else(|| {
             let err_msg = response.get("error")
@@ -241,9 +241,14 @@ pub async fn discover_tools_sse(endpoint: &str) -> Result<Vec<DiscoveredTool>> {
 async fn sse_send_request(sse_url: &str, request: Value) -> Result<Value> {
     use futures::StreamExt;
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .http1_only()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| AQBotError::Gateway(format!("Failed to build SSE client: {}", e)))?;
 
     // 1. GET the SSE endpoint to open a persistent stream
+    tracing::info!("SSE: connecting to {}", sse_url);
     let sse_resp = client.get(sse_url)
         .header("Accept", "text/event-stream")
         .send().await
@@ -252,6 +257,7 @@ async fn sse_send_request(sse_url: &str, request: Value) -> Result<Value> {
     if !sse_resp.status().is_success() {
         return Err(AQBotError::Gateway(format!("SSE connect returned {}", sse_resp.status())));
     }
+    tracing::info!("SSE: connected, status={}", sse_resp.status());
 
     let base_url = {
         let parsed = reqwest::Url::parse(sse_url)
@@ -267,12 +273,14 @@ async fn sse_send_request(sse_url: &str, request: Value) -> Result<Value> {
         let chunk = byte_stream.next().await
             .ok_or_else(|| AQBotError::Gateway("SSE stream ended before endpoint event".into()))?
             .map_err(|e| AQBotError::Gateway(format!("SSE read error: {}", e)))?;
-        buffer.push_str(&String::from_utf8_lossy(&chunk));
+        let text = String::from_utf8_lossy(&chunk).replace("\r\n", "\n").replace('\r', "\n");
+        buffer.push_str(&text);
 
         if let Some(url) = extract_sse_endpoint(&mut buffer, &base_url) {
             break url;
         }
     };
+    tracing::info!("SSE: got messages endpoint: {}", messages_url);
 
     // 3. POST initialize handshake
     let init_request = serde_json::json!({
@@ -292,9 +300,11 @@ async fn sse_send_request(sse_url: &str, request: Value) -> Result<Value> {
     if !init_resp.status().is_success() {
         return Err(AQBotError::Gateway(format!("SSE initialize returned {}", init_resp.status())));
     }
+    tracing::info!("SSE: initialize POST accepted, status={}", init_resp.status());
 
     // Read init response from SSE stream
     let _init_result = sse_read_response(&mut byte_stream, &mut buffer).await?;
+    tracing::info!("SSE: initialize handshake complete");
 
     // 4. POST initialized notification (no id — it's a notification)
     let _ = client.post(&messages_url)
@@ -313,6 +323,7 @@ async fn sse_send_request(sse_url: &str, request: Value) -> Result<Value> {
     if !resp.status().is_success() {
         return Err(AQBotError::Gateway(format!("SSE request returned {}", resp.status())));
     }
+    tracing::info!("SSE: request POST accepted, reading response...");
 
     // 6. Read the response from SSE stream
     sse_read_response(&mut byte_stream, &mut buffer).await
@@ -373,7 +384,8 @@ where
             Ok(None) => return Err(AQBotError::Gateway("SSE stream ended before response".into())),
             Ok(Some(Err(e))) => return Err(AQBotError::Gateway(format!("SSE read error: {}", e))),
             Ok(Some(Ok(chunk))) => {
-                buffer.push_str(&String::from_utf8_lossy(chunk.as_ref()));
+                let text = String::from_utf8_lossy(chunk.as_ref()).replace("\r\n", "\n").replace('\r', "\n");
+                buffer.push_str(&text);
             }
         }
     }
