@@ -5,8 +5,6 @@ name-template: 'AQBot v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'
 
 template: |
-  ## 🎉 AQBot $RESOLVED_VERSION
-
   $CHANGES
 
   **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
