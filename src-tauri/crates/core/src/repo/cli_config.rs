@@ -117,6 +117,7 @@ fn run_version_command(cmd: &str, arg: &str) -> Option<String> {
         })
 }
 
+#[cfg(target_os = "linux")]
 fn check_command_exists(cmd: &str) -> bool {
     std::process::Command::new("which")
         .arg(cmd)

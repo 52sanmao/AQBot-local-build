@@ -193,6 +193,7 @@ dependencies = [
  "aqbot-providers",
  "base64 0.22.1",
  "futures",
+ "objc2 0.6.4",
  "rcgen",
  "rustls 0.23.37",
  "sea-orm",
