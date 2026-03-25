@@ -370,6 +370,8 @@
     "deleteProviderConfirm": "确定删除此服务商？关联的密钥和模型配置将一同删除。",
     "deleteGroupConfirm": "确认删除该分组下的所有模型？",
     "testGroup": "检测当前分组",
+    "fullscreen": "全屏",
+    "exitFullscreen": "退出全屏",
     "addModelToGroup": "添加到当前分组",
     "enableProvider": "启用服务商",
     "addKey": "添加密钥",

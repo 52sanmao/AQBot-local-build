@@ -370,6 +370,8 @@
     "deleteProviderConfirm": "Delete this provider? Associated keys and model configurations will also be deleted.",
     "deleteGroupConfirm": "Delete all models in this group?",
     "testGroup": "Test this group",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
     "addModelToGroup": "Add to this group",
     "enableProvider": "Enable Provider",
     "addKey": "Add Key",

@@ -23,7 +23,7 @@ import {
   App,
   theme,
 } from 'antd';
-import { Maximize2, Mic, Lightbulb, Copy, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp, ChevronRight, ChevronDown } from 'lucide-react';
+import { Maximize2, Mic, Lightbulb, Copy, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp, ChevronRight, ChevronDown, Expand, Shrink } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -521,6 +521,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   useEffect(() => { setExpandedGroups(groupKeys); }, [groupKeys]);
   const allExpanded = expandedGroups.length >= groupKeys.length;
+  const [modelListFullscreen, setModelListFullscreen] = useState(false);
 
   // Flatten grouped models into virtual rows
   type ModelListRow = { type: 'group'; group: string; models: Model[] } | { type: 'model'; model: Model; group: string } | { type: 'spacer'; beforeGroup: string };
@@ -726,7 +727,14 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       </Card>
 
       {/* Models List */}
+      {modelListFullscreen && (
+        <div
+          style={{ position: 'fixed', top: 37, left: 0, right: 0, bottom: 0, zIndex: 999, background: 'rgba(0,0,0,0.45)' }}
+          onClick={() => setModelListFullscreen(false)}
+        />
+      )}
       <Card
+        style={modelListFullscreen ? { position: 'fixed', top: 47, left: 10, right: 10, bottom: 10, zIndex: 1000, overflow: 'auto', display: 'flex', flexDirection: 'column' } : undefined}
         title={
           <Space>
             <span>{t('settings.models')}</span>
@@ -799,6 +807,14 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                 }}
               />
             </Tooltip>
+            <Tooltip title={modelListFullscreen ? t('settings.exitFullscreen', '退出全屏') : t('settings.fullscreen', '全屏')}>
+              <Button
+                type="text"
+                size="small"
+                icon={modelListFullscreen ? <Shrink size={14} /> : <Expand size={14} />}
+                onClick={() => setModelListFullscreen(!modelListFullscreen)}
+              />
+            </Tooltip>
           </Space>
         }
       >
@@ -816,7 +832,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
         )}
         <div
           ref={modelListParentRef}
-          style={{ maxHeight: 520, overflow: 'auto' }}
+          style={{ maxHeight: modelListFullscreen ? 'calc(100vh - 140px)' : 520, overflow: 'auto' }}
         >
           <div style={{ height: modelListVirtualizer.getTotalSize(), position: 'relative' }}>
             {modelListVirtualizer.getVirtualItems().map((virtualRow) => {
