@@ -340,6 +340,9 @@ async fn execute_tool_call(
     let arguments: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
         .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
 
+    let timeout_secs = server.execute_timeout_secs.unwrap_or(30) as u64;
+    let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+
     let result = match server.transport.as_str() {
         "builtin" => {
             aqbot_core::builtin_tools::dispatch(&server.name, &tool_call.function.name, arguments).await
@@ -353,21 +356,36 @@ async fn execute_tool_call(
                 .and_then(|s| serde_json::from_str(s).ok()).unwrap_or_default();
             let env: std::collections::HashMap<String, String> = server.env_json.as_ref()
                 .and_then(|s| serde_json::from_str(s).ok()).unwrap_or_default();
-            aqbot_core::mcp_client::call_tool_stdio(&command, &args, &env, &tool_call.function.name, arguments).await
+            match tokio::time::timeout(timeout_duration,
+                aqbot_core::mcp_client::call_tool_stdio(&command, &args, &env, &tool_call.function.name, arguments)
+            ).await {
+                Ok(r) => r,
+                Err(_) => return (format!("Error: Tool execution timed out after {}s", timeout_secs), true),
+            }
         }
         "http" => {
             let endpoint = match &server.endpoint {
                 Some(ep) => ep.clone(),
                 None => return ("Error: HTTP server has no endpoint configured".into(), true),
             };
-            aqbot_core::mcp_client::call_tool_http(&endpoint, &tool_call.function.name, arguments).await
+            match tokio::time::timeout(timeout_duration,
+                aqbot_core::mcp_client::call_tool_http(&endpoint, &tool_call.function.name, arguments)
+            ).await {
+                Ok(r) => r,
+                Err(_) => return (format!("Error: Tool execution timed out after {}s", timeout_secs), true),
+            }
         }
         "sse" => {
             let endpoint = match &server.endpoint {
                 Some(ep) => ep.clone(),
                 None => return ("Error: SSE server has no endpoint configured".into(), true),
             };
-            aqbot_core::mcp_client::call_tool_sse(&endpoint, &tool_call.function.name, arguments).await
+            match tokio::time::timeout(timeout_duration,
+                aqbot_core::mcp_client::call_tool_sse(&endpoint, &tool_call.function.name, arguments)
+            ).await {
+                Ok(r) => r,
+                Err(_) => return (format!("Error: Tool execution timed out after {}s", timeout_secs), true),
+            }
         }
         other => return (format!("Error: Unsupported transport '{}'", other), true),
     };

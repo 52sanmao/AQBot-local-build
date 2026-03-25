@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
+  Avatar,
   Button,
+  Dropdown,
   Modal,
   Form,
   Input,
@@ -16,10 +18,19 @@ import {
   theme,
   message,
 } from 'antd';
-import { Plus, Trash2, Server, Globe, FileSearch, RefreshCw } from 'lucide-react';
+import type { MenuProps } from 'antd';
+import { Plus, Trash2, Server, Globe, FileSearch, RefreshCw, Radio, Terminal, Plug, Smile, FileImage, Link } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMcpStore } from '@/stores';
+import { useResolvedAvatarSrc } from '@/hooks/useResolvedAvatarSrc';
+import { invoke, isTauri } from '@/lib/invoke';
 import type { McpServer, CreateMcpServerInput, ToolDescriptor } from '@/types';
+
+const MCP_EMOJI_PICKS = [
+  '🔌', '🤖', '🧠', '🔧', '🛠️', '⚡', '🌐', '🔍',
+  '📡', '💻', '🖥️', '📦', '🗄️', '🔗', '🎯', '🚀',
+  '📊', '📝', '🗺️', '🎨', '🔒', '💬', '📁', '⚙️',
+];
 
 const BUILTIN_ICONS: Record<string, React.ReactNode> = {
   '@aqbot/fetch': <Globe size={16} />,
@@ -30,6 +41,44 @@ const BUILTIN_DISPLAY_NAME_KEYS: Record<string, string> = {
   '@aqbot/fetch': 'settings.mcpServers.builtinFetch',
   '@aqbot/search-file': 'settings.mcpServers.builtinSearchFile',
 };
+
+// ── MCP Server Avatar Helper ──────────────────────────────
+
+function McpServerAvatar({ server, size = 24 }: { server: McpServer; size?: number }) {
+  const resolvedSrc = useResolvedAvatarSrc(
+    (server.iconType as 'icon' | 'emoji' | 'url' | 'file') ?? 'icon',
+    server.iconValue ?? '',
+  );
+  const { token } = theme.useToken();
+
+  if (server.iconType === 'emoji' && server.iconValue) {
+    return (
+      <span style={{
+        width: size, height: size, borderRadius: '50%',
+        backgroundColor: token.colorFillSecondary,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.6, lineHeight: 1, flexShrink: 0,
+      }}>
+        {server.iconValue}
+      </span>
+    );
+  }
+  if ((server.iconType === 'url' || server.iconType === 'file') && server.iconValue) {
+    const src = server.iconType === 'file' ? resolvedSrc : server.iconValue;
+    return <Avatar size={size} src={src} style={{ flexShrink: 0 }} />;
+  }
+  // Default: MCP plug icon
+  return (
+    <span style={{
+      width: size, height: size, borderRadius: '50%',
+      backgroundColor: token.colorFillSecondary,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0, color: token.colorTextSecondary,
+    }}>
+      <Plug size={size * 0.6} />
+    </span>
+  );
+}
 
 // ── Left Sidebar: Server List ─────────────────────────────
 
@@ -57,7 +106,6 @@ function McpServerList({
   const renderServerItem = (s: McpServer) => {
     const isSelected = selectedId === s.id;
     const isBuiltin = s.source === 'builtin';
-    const icon = isBuiltin ? BUILTIN_ICONS[s.name] : <Server size={16} />;
     const displayName = isBuiltin ? t(BUILTIN_DISPLAY_NAME_KEYS[s.name] ?? s.name, s.name) : s.name;
 
     return (
@@ -76,17 +124,24 @@ function McpServerList({
           if (!isSelected) e.currentTarget.style.backgroundColor = '';
         }}
       >
-        <span style={{ marginRight: 8, flexShrink: 0, color: token.colorTextSecondary, display: 'inline-flex' }}>
-          {icon}
+        <span style={{ marginRight: 8, flexShrink: 0, display: 'inline-flex' }}>
+          {isBuiltin ? (
+            <span style={{ color: token.colorTextSecondary, display: 'inline-flex' }}>
+              {BUILTIN_ICONS[s.name] ?? <Server size={16} />}
+            </span>
+          ) : (
+            <McpServerAvatar server={s} size={24} />
+          )}
         </span>
         <div className="min-w-0 flex-1 flex items-center gap-2">
           <span style={{ color: isSelected ? token.colorPrimary : undefined }}>{displayName}</span>
           {!isBuiltin && (
             <Tag
               color={s.transport === 'stdio' ? 'blue' : s.transport === 'sse' ? 'orange' : 'green'}
-              style={{ margin: 0, fontSize: 11 }}
+              style={{ margin: 0, fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}
             >
-              {s.transport}
+              {s.transport === 'sse' ? <Radio size={11} /> : s.transport === 'http' ? <Globe size={11} /> : <Terminal size={11} />}
+              {s.transport.toUpperCase()}
             </Tag>
           )}
         </div>
@@ -161,8 +216,13 @@ function McpServerDetail({
   onToggle: (enable: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { updateServer, deleteServer, toolDescriptors, loadToolDescriptors, discoverTools } = useMcpStore();
   const [discovering, setDiscovering] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [iconUrlInput, setIconUrlInput] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Local state for text inputs to avoid cursor-jump on every keystroke
   const [localName, setLocalName] = useState(server.name);
@@ -220,14 +280,72 @@ function McpServerDetail({
     onDeleted();
   };
 
+  const handleEmojiSelect = async (emoji: string) => {
+    await updateServer(server.id, { iconType: 'emoji', iconValue: emoji });
+    setShowEmojiPicker(false);
+  };
+
+  const handleIconUrlConfirm = async () => {
+    if (iconUrlInput.trim()) {
+      await updateServer(server.id, { iconType: 'url', iconValue: iconUrlInput.trim() });
+      setShowUrlInput(false);
+      setIconUrlInput('');
+    }
+  };
+
+  const handleIconFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUri = reader.result as string;
+      const match = dataUri.match(/^data:([^;]+);base64,(.+)$/s);
+      if (match && isTauri()) {
+        try {
+          const relativePath = await invoke<string>('save_avatar_file', { data: match[2], mimeType: match[1] });
+          await updateServer(server.id, { iconType: 'file', iconValue: relativePath });
+        } catch {
+          await updateServer(server.id, { iconType: 'file', iconValue: dataUri });
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleResetIcon = async () => {
+    await updateServer(server.id, { iconType: '', iconValue: '' });
+  };
+
+  const avatarMenuItems: MenuProps['items'] = [
+    { key: 'emoji', icon: <Smile size={14} />, label: t('userProfile.emoji', 'Emoji'),
+      onClick: () => { setShowEmojiPicker(true); setShowUrlInput(false); } },
+    { key: 'file', icon: <FileImage size={14} />, label: t('userProfile.selectImage', '选择图片'),
+      onClick: () => fileInputRef.current?.click() },
+    { key: 'url', icon: <Link size={14} />, label: t('userProfile.imageUrl', '图片链接'),
+      onClick: () => { setShowUrlInput(true); setShowEmojiPicker(false); } },
+    { type: 'divider' as const },
+    { key: 'reset', icon: <Plug size={14} />, label: t('settings.mcpServers.resetIcon', '恢复默认'),
+      onClick: handleResetIcon },
+  ];
+
   return (
     <div className="p-6 pb-12 overflow-y-auto h-full">
+      {/* Hidden file input for avatar upload */}
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleIconFileSelect} />
+
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          {isBuiltin && (
+        <div className="flex items-center gap-3">
+          {isBuiltin ? (
             <span style={{ display: 'inline-flex', color: 'var(--ant-color-text-secondary)' }}>
               {BUILTIN_ICONS[server.name]}
             </span>
+          ) : (
+            <Dropdown menu={{ items: avatarMenuItems }} trigger={['click']} placement="bottomLeft">
+              <span style={{ cursor: 'pointer' }}>
+                <McpServerAvatar server={server} size={36} />
+              </span>
+            </Dropdown>
           )}
           <span style={{ fontWeight: 600, fontSize: 16 }}>{displayName}</span>
           {isBuiltin && (
@@ -249,6 +367,37 @@ function McpServerDetail({
         )}
       </div>
 
+      {/* Emoji picker / URL input for avatar */}
+      {!isBuiltin && showEmojiPicker && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4,
+          padding: 8, borderRadius: token.borderRadius,
+          backgroundColor: token.colorFillQuaternary, marginBottom: 12, maxWidth: 300,
+        }}>
+          {MCP_EMOJI_PICKS.map((emoji) => (
+            <button key={emoji} onClick={() => handleEmojiSelect(emoji)} style={{
+              width: 32, height: 32, fontSize: 18, border: 'none',
+              borderRadius: token.borderRadiusSM, cursor: 'pointer',
+              backgroundColor: server.iconValue === emoji ? token.colorPrimaryBg : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+      {!isBuiltin && showUrlInput && (
+        <Input
+          placeholder="https://example.com/icon.png"
+          value={iconUrlInput}
+          onChange={(e) => setIconUrlInput(e.target.value)}
+          onPressEnter={handleIconUrlConfirm}
+          addonAfter={<span style={{ cursor: 'pointer' }} onClick={handleIconUrlConfirm}>OK</span>}
+          size="small"
+          style={{ maxWidth: 300, marginBottom: 12 }}
+        />
+      )}
+
       {!isBuiltin && (
         <>
           <div style={rowStyle} className="flex items-center justify-between">
@@ -268,9 +417,9 @@ function McpServerDetail({
               onChange={(val) => handleFieldChange('transport', val)}
               style={{ width: 280 }}
               options={[
-                { value: 'stdio', label: 'stdio' },
-                { value: 'http', label: 'http' },
-                { value: 'sse', label: 'sse' },
+                { value: 'sse', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Radio size={14} /> SSE（服务器推送事件）</span> },
+                { value: 'http', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Globe size={14} /> StreamableHTTP（流式HTTP请求）</span> },
+                { value: 'stdio', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Terminal size={14} /> Stdio（服务器本地标准输入输出）</span> },
               ]}
             />
           </div>
@@ -534,7 +683,11 @@ export default function McpServerSettings() {
             <Input />
           </Form.Item>
           <Form.Item name="transport" label={t('settings.mcpServers.transport')} rules={[{ required: true }]}>
-            <Select options={[{ value: 'stdio', label: 'stdio' }, { value: 'http', label: 'http' }, { value: 'sse', label: 'sse' }]} />
+            <Select options={[
+              { value: 'sse', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Radio size={14} /> SSE（服务器推送事件）</span> },
+              { value: 'http', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Globe size={14} /> StreamableHTTP（流式HTTP请求）</span> },
+              { value: 'stdio', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Terminal size={14} /> Stdio（服务器本地标准输入输出）</span> },
+            ]} />
           </Form.Item>
           {transport === 'stdio' && (
             <>

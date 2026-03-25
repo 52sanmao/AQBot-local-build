@@ -18,6 +18,8 @@ pub struct Model {
     pub discover_timeout_secs: Option<i32>,
     pub execute_timeout_secs: Option<i32>,
     pub headers_json: Option<String>,
+    pub icon_type: Option<String>,
+    pub icon_value: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

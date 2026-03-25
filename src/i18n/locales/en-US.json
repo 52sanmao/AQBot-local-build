@@ -510,7 +510,8 @@
       "custom": "Custom",
       "discoverTimeout": "Discovery Timeout",
       "executeTimeout": "Execution Timeout",
-      "customHeaders": "Custom Headers"
+      "customHeaders": "Custom Headers",
+      "resetIcon": "Reset to Default"
     },
     "knowledge": {
       "title": "Knowledge Base",

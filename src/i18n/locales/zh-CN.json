@@ -510,7 +510,8 @@
       "custom": "自定义",
       "discoverTimeout": "发现超时",
       "executeTimeout": "执行超时",
-      "customHeaders": "自定义请求头"
+      "customHeaders": "自定义请求头",
+      "resetIcon": "恢复默认图标"
     },
     "knowledge": {
       "title": "知识库",

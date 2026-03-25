@@ -18,6 +18,8 @@ export type McpServer = {
   discoverTimeoutSecs?: number;
   executeTimeoutSecs?: number;
   headersJson?: string;
+  iconType?: string;
+  iconValue?: string;
 };
 
 export type ToolDescriptor = {
@@ -54,6 +56,8 @@ export type CreateMcpServerInput = {
   discoverTimeoutSecs?: number;
   executeTimeoutSecs?: number;
   headersJson?: string;
+  iconType?: string;
+  iconValue?: string;
 };
 
 export type UpdateMcpServerInput = Partial<CreateMcpServerInput>;

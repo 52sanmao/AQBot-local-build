@@ -41,6 +41,8 @@ fn make_builtin_server(def: &BuiltinDef, enabled: bool) -> McpServer {
         discover_timeout_secs: None,
         execute_timeout_secs: None,
         headers_json: None,
+        icon_type: None,
+        icon_value: None,
     }
 }
 
@@ -99,6 +101,8 @@ fn model_to_mcp_server(m: mcp_servers::Model) -> McpServer {
         discover_timeout_secs: m.discover_timeout_secs,
         execute_timeout_secs: m.execute_timeout_secs,
         headers_json: m.headers_json,
+        icon_type: m.icon_type,
+        icon_value: m.icon_value,
     }
 }
 
@@ -161,6 +165,8 @@ pub async fn create_mcp_server(
         discover_timeout_secs: Set(input.discover_timeout_secs),
         execute_timeout_secs: Set(input.execute_timeout_secs),
         headers_json: Set(input.headers_json),
+        icon_type: Set(input.icon_type),
+        icon_value: Set(input.icon_value),
     }
     .insert(db)
     .await?;
@@ -205,6 +211,16 @@ pub async fn update_mcp_server(
     let discover_timeout_secs = input.discover_timeout_secs.or(existing.discover_timeout_secs);
     let execute_timeout_secs = input.execute_timeout_secs.or(existing.execute_timeout_secs);
     let headers_json = input.headers_json.or(existing.headers_json);
+    let icon_type = match input.icon_type {
+        Some(ref v) if v.is_empty() => None,
+        Some(v) => Some(v),
+        None => existing.icon_type,
+    };
+    let icon_value = match input.icon_value {
+        Some(ref v) if v.is_empty() => None,
+        Some(v) => Some(v),
+        None => existing.icon_value,
+    };
 
     let model = mcp_servers::Entity::find_by_id(id)
         .one(db)
@@ -223,6 +239,8 @@ pub async fn update_mcp_server(
     am.discover_timeout_secs = Set(discover_timeout_secs);
     am.execute_timeout_secs = Set(execute_timeout_secs);
     am.headers_json = Set(headers_json);
+    am.icon_type = Set(icon_type);
+    am.icon_value = Set(icon_value);
     am.update(db).await?;
 
     get_mcp_server(db, id).await
