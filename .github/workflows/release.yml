@@ -224,7 +224,7 @@ jobs:
           export PKG_CONFIG_ALLOW_CROSS=1
           export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig/:$PKG_CONFIG_PATH
           export PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu/
-          pnpm tauri build --target aarch64-unknown-linux-gnu
+          pnpm tauri build --target aarch64-unknown-linux-gnu --bundles deb,rpm
         env:
           NODE_OPTIONS: '--max_old_space_size=4096'
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
@@ -245,7 +245,4 @@ jobs:
           files: |
             src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb
             src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/rpm/*.rpm
-            src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
-            src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage.tar.gz
-            src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage.tar.gz.sig
 
