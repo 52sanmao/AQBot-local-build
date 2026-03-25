@@ -282,7 +282,7 @@ export function ChatSidebar() {
     return icon
   }, [streamingConversationId, token.colorPrimary, token.colorPrimaryBg, token.colorBgContainer])
 
-  const conversationItems: ConversationItemType[] = useMemo(
+   const conversationItems: ConversationItemType[] = useMemo(
     () =>
       filteredConversations.map((conv: Conversation) => {
         const icon = buildIcon(conv)

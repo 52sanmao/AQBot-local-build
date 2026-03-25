@@ -1380,13 +1380,13 @@ export function ChatView() {
   }, []);
 
   // ── Resolve model name for the conversation ──────────────────────
-  const getModelDisplayName = useCallback((modelId?: string | null, providerId?: string | null) => {
+  const getModelDisplayInfo = useCallback((modelId?: string | null, providerId?: string | null) => {
     const mid = modelId ?? activeConversation?.model_id;
     const pid = providerId ?? activeConversation?.provider_id;
-    if (!mid) return 'AI';
+    if (!mid) return { modelName: 'AI', providerName: '' };
     const provider = providers.find((p) => p.id === pid);
     const model = provider?.models.find((m) => m.model_id === mid);
-    return model?.name ?? mid;
+    return { modelName: model?.name ?? mid, providerName: provider?.name ?? '' };
   }, [activeConversation, providers]);
 
   // ── Roles ──────────────────────────────────────────────────────────
@@ -1505,20 +1505,26 @@ export function ChatView() {
           />
         );
       },
-      header: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Typography.Text style={{ fontSize: 13 }}>
-              {getModelDisplayName(msg?.model_id, msg?.provider_id)}
-            </Typography.Text>
-            {msg && (
-              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                {formatTime(msg.created_at)}
+      header: (() => {
+        const { modelName, providerName } = getModelDisplayInfo(msg?.model_id, msg?.provider_id);
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {providerName && (
+                <Tag style={{ fontSize: 11, margin: 0, padding: '0 4px', lineHeight: '18px', color: token.colorPrimary, backgroundColor: token.colorPrimaryBg, border: 'none' }}>{providerName}</Tag>
+              )}
+              <Typography.Text style={{ fontSize: 13 }}>
+                {modelName}
               </Typography.Text>
-            )}
+              {msg && (
+                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                  {formatTime(msg.created_at)}
+                </Typography.Text>
+              )}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      })(),
       footer: footerLoading ? (
         <div
           style={{
@@ -1594,7 +1600,7 @@ export function ChatView() {
         </div>
       ),
     };
-  }, [activeConversationId, aiContentNodesById, codeBlockDarkTheme, codeBlockThemes, deleteMessage, formatTime, getBubbleVariant, getModelDisplayName, isDarkMode, messageApi, messageById, regenerateMessage, renderConvIconForChat, streaming, streamingMessageId, t, token.colorError, token.colorPrimary]);
+  }, [activeConversationId, aiContentNodesById, codeBlockDarkTheme, codeBlockThemes, deleteMessage, formatTime, getBubbleVariant, getModelDisplayInfo, isDarkMode, messageApi, messageById, regenerateMessage, renderConvIconForChat, streaming, streamingMessageId, t, token.colorError, token.colorPrimary]);
 
   const contextClearRole = useCallback((bubbleData: BubbleItemType) => {
     const msgId = String(bubbleData.content ?? '');

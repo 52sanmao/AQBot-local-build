@@ -63,7 +63,7 @@ export function ModelSelector({ style }: ModelSelectorProps) {
     if (!pid || !mid) return null;
     const provider = providers.find((p) => p.id === pid);
     const model = provider?.models.find((m) => m.model_id === mid);
-    return { pid, mid, name: model?.name ?? mid };
+    return { pid, mid, name: model?.name ?? mid, providerName: provider?.name ?? '' };
   }, [activeConversation, settings.default_provider_id, settings.default_model_id, providers]);
 
   const currentValue = currentModel ? `${currentModel.pid}::${currentModel.mid}` : undefined;
@@ -144,7 +144,9 @@ export function ModelSelector({ style }: ModelSelectorProps) {
     providerId: string,
     modelId: string,
     modelName: string,
+    providerName: string,
     isPinned: boolean,
+    showProviderTag: boolean,
   ) => {
     const key = `${providerId}::${modelId}`;
     const isActive = currentValue === key;
@@ -165,7 +167,12 @@ export function ModelSelector({ style }: ModelSelectorProps) {
         onMouseLeave={() => setHoveredKey(null)}
       >
         <ModelIcon model={modelId} size={22} type="avatar" />
-        <span style={{ flex: 1, fontSize: 14, color: isActive ? token.colorPrimary : undefined }}>{modelName}</span>
+        <span className="flex items-center gap-1.5" style={{ flex: 1, minWidth: 0 }}>
+          {showProviderTag && providerName && (
+            <Tag style={{ fontSize: 11, margin: 0, padding: '0 4px', lineHeight: '18px', flexShrink: 0, color: token.colorPrimary, backgroundColor: token.colorPrimaryBg, border: 'none' }}>{providerName}</Tag>
+          )}
+          <span style={{ fontSize: 14, color: isActive ? token.colorPrimary : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{modelName}</span>
+        </span>
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <span
             style={{ cursor: 'pointer', color: isPinned ? token.colorPrimary : token.colorTextQuaternary, fontSize: 14 }}
@@ -196,6 +203,9 @@ export function ModelSelector({ style }: ModelSelectorProps) {
         {currentModel && (
           <>
             <ModelIcon model={currentModel.mid} size={16} type="avatar" />
+            {currentModel.providerName && (
+              <Tag style={{ fontSize: 11, margin: 0, padding: '0 4px', lineHeight: '16px', color: token.colorPrimary, backgroundColor: token.colorPrimaryBg, border: 'none' }}>{currentModel.providerName}</Tag>
+            )}
             <span>{currentModel.name}</span>
           </>
         )}
@@ -243,7 +253,7 @@ export function ModelSelector({ style }: ModelSelectorProps) {
                 <span>{t('chat.pinnedModels', '置顶模型')}</span>
               </div>
               {pinnedItems.map((item) =>
-                renderModelRow(item.pid, item.mid, item.name, true),
+                renderModelRow(item.pid, item.mid, item.name, item.providerName, true, true),
               )}
               <div style={{ margin: '8px 16px 4px', borderTop: `1px solid ${token.colorBorderSecondary}` }} />
             </div>
@@ -270,7 +280,7 @@ export function ModelSelector({ style }: ModelSelectorProps) {
                 />
               </div>
               {provider.models.map((model) =>
-                renderModelRow(provider.id, model.model_id, model.name, pinnedModels.includes(`${provider.id}::${model.model_id}`)),
+                renderModelRow(provider.id, model.model_id, model.name, provider.name, pinnedModels.includes(`${provider.id}::${model.model_id}`), false),
               )}
             </div>
           ))}
