@@ -57,7 +57,11 @@ pub async fn build_embed_context(
         api_key: decrypted_key,
         key_id: key_row.id.clone(),
         provider_id: provider.id.clone(),
-        base_url: Some(provider.api_host.clone()),
+        base_url: Some(if let Some(ref path) = provider.api_path {
+            format!("{}{}", provider.api_host.trim_end_matches('/'), path)
+        } else {
+            provider.api_host.clone()
+        }),
         proxy_config: resolved_proxy,
     };
 
