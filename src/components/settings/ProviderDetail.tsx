@@ -1223,6 +1223,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
         destroyOnHidden
       >
         {editingModel && (
+          <div data-os-scrollbar style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 }}>
           <div className="space-y-4">
             {/* Model Icon + Name */}
             <div className="flex items-center gap-3 mb-4">
@@ -1350,6 +1351,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                 </Form.Item>
               </Form>
             </div>
+          </div>
           </div>
         )}
       </Modal>
