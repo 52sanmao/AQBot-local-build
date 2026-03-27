@@ -23,6 +23,16 @@ const { Sider, Content } = Layout;
 const { useToken } = theme;
 const NodeRenderer = lazy(() => import('markstream-react'));
 
+/** Show the main window (it starts hidden to avoid white flash). */
+async function showWindow() {
+  try {
+    const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+    await getCurrentWebviewWindow().show();
+  } catch (e) {
+    console.warn('Failed to show window:', e);
+  }
+}
+
 function AppInner() {
   const { token } = useToken();
   const { t } = useTranslation();
@@ -189,7 +199,11 @@ function AppRoot() {
   // Load persisted settings from backend on startup, then apply native settings
   useEffect(() => {
     const init = async () => {
-      await useSettingsStore.getState().fetchSettings();
+      try {
+        await useSettingsStore.getState().fetchSettings();
+      } catch (e) {
+        console.warn('Failed to fetch settings:', e);
+      }
 
       if (!isTauri()) return;
       const settings = useSettingsStore.getState().settings;
@@ -217,6 +231,8 @@ function AppRoot() {
         console.warn('Failed to set autostart:', e);
       }
 
+      // Show window after initialization (window starts hidden to avoid white flash)
+      await showWindow();
     };
     init();
   }, []);

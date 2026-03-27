@@ -10,5 +10,12 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Match initial background to theme to avoid white flash
+      try {
+        var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+        if (m && m.matches) document.body.style.backgroundColor = '#141414';
+      } catch(e) {}
+    </script>
   </body>
 </html>
