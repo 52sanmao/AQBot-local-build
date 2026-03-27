@@ -9,6 +9,8 @@ import Conversations from '@ant-design/x/es/conversations'
 import type { ConversationItemType } from '@ant-design/x/es/conversations/interface'
 import { useTranslation } from 'react-i18next'
 import { useConversationStore, useProviderStore, useSettingsStore } from '@/stores'
+import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts'
+import type { ShortcutAction } from '@/lib/shortcuts'
 import type { Conversation, Message } from '@/types'
 
 function getDateGroup(timestamp: number): string {
@@ -49,6 +51,12 @@ export function ChatSidebar() {
 
   const providers = useProviderStore((s) => s.providers)
   const settings = useSettingsStore((s) => s.settings)
+
+  const shortcutHint = useCallback((label: string, action: ShortcutAction) => {
+    if (!settings) return label
+    const binding = getShortcutBinding(settings, action)
+    return `${label} (${formatShortcutForDisplay(binding)})`
+  }, [settings])
 
   const [searchText, setSearchText] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
@@ -586,7 +594,7 @@ export function ChatSidebar() {
                   onClick={handleShowArchived}
                 />
               </Tooltip>
-              <Tooltip title={t('chat.newConversation')}>
+              <Tooltip title={shortcutHint(t('chat.newConversation'), 'newConversation')}>
                 <Button
                   type="text"
                   icon={<MessageSquarePlus size={16} />}

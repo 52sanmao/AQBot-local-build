@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { Tag, Modal, Input, theme } from 'antd';
+import { Tag, Modal, Input, theme, Tooltip } from 'antd';
 import { Search, Settings, Pin, PinOff } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { useTranslation } from 'react-i18next';
 import { useProviderStore, useConversationStore, useSettingsStore, useUIStore } from '@/stores';
+import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
 
 const PINNED_MODELS_KEY = 'aqbot_pinned_models';
 
@@ -210,6 +211,7 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
       {children ? (
         <span onClick={() => setOpen(true)}>{children}</span>
       ) : (
+        <Tooltip title={`${t('chat.switchModel', '切换模型')} (${formatShortcutForDisplay(getShortcutBinding(settings, 'toggleModelSelector'))})`}>
         <Tag
           onClick={() => setOpen(true)}
           style={{
@@ -233,6 +235,7 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
             </>
           )}
         </Tag>
+        </Tooltip>
       )}
 
       <Modal

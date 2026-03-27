@@ -5,6 +5,7 @@ import { Settings, XCircle, Sun, Moon, Monitor, Globe, Pin, PinOff, RefreshCw } 
 import { useTranslation } from 'react-i18next';
 import { useUIStore, useSettingsStore } from '@/stores';
 import { isTauri, invoke } from '@/lib/invoke';
+import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
 
 const THEME_OPTIONS = [
   { key: 'system', icon: <Monitor size={14} />, labelKey: 'settings.themeSystem' },
@@ -33,6 +34,7 @@ export function TitleBar() {
   const themeMode = useSettingsStore((s) => s.settings.theme_mode);
   const alwaysOnTop = useSettingsStore((s) => s.settings.always_on_top);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
+  const settings = useSettingsStore((s) => s.settings);
 
   const isInSettings = activePage === 'settings';
   const [pinned, setPinned] = useState(alwaysOnTop ?? false);
@@ -224,6 +226,7 @@ export function TitleBar() {
         </Tooltip>
 
         {/* Settings Toggle */}
+        <Tooltip title={`${isInSettings ? t('settings.closeSettings', '关闭设置') : t('settings.openSettings', '设置')} (${formatShortcutForDisplay(getShortcutBinding(settings, 'openSettings'))})`}>
         <button
           onClick={handleSettingsToggle}
           style={{
@@ -247,6 +250,7 @@ export function TitleBar() {
         >
           {isInSettings ? <XCircle size={14} /> : <Settings size={14} />}
         </button>
+        </Tooltip>
       </div>
     </div>
   );

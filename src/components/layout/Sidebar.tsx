@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Tooltip, Avatar, theme } from 'antd';
 import { MessageSquare, Router, FolderOpen, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useUIStore } from '@/stores';
+import { useUIStore, useSettingsStore } from '@/stores';
 import { useUserProfileStore } from '@/stores/userProfileStore';
+import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
+import type { ShortcutAction } from '@/lib/shortcuts';
 import { useResolvedAvatarSrc } from '@/hooks/useResolvedAvatarSrc';
 import { UserProfileModal } from './UserProfileModal';
 import type { PageKey } from '@/types';
@@ -22,11 +24,21 @@ export function Sidebar() {
   const profile = useUserProfileStore((s) => s.profile);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const resolvedAvatarSrc = useResolvedAvatarSrc(profile.avatarType, profile.avatarValue);
+  const settings = useSettingsStore((s) => s.settings);
+
+  const NAV_SHORTCUT_MAP: Partial<Record<PageKey, ShortcutAction>> = {
+    gateway: 'toggleGateway',
+  };
 
   const renderNavButton = (item: { key: PageKey; icon: React.ReactNode; labelKey: string }) => {
     const isActive = activePage === item.key;
+    const label = t(item.labelKey);
+    const action = NAV_SHORTCUT_MAP[item.key];
+    const title = action
+      ? `${label} (${formatShortcutForDisplay(getShortcutBinding(settings, action))})`
+      : label;
     return (
-      <Tooltip key={item.key} title={t(item.labelKey)} placement="right">
+      <Tooltip key={item.key} title={title} placement="right">
         <button
           onClick={() => setActivePage(item.key)}
           className="flex items-center justify-center text-base transition-colors"
