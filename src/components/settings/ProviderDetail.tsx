@@ -32,6 +32,7 @@ import { useProviderStore, useUIStore } from '@/stores';
 import { SmartProviderIcon } from '@/lib/providerIcons';
 import { getEditableCapabilities, getVisibleModelCapabilities, sanitizeModelCapabilities } from '@/lib/modelCapabilities';
 import IconPickerModal from './IconPickerModal';
+import { AvatarEditBadge } from '@/components/shared/AvatarEditBadge';
 import type { Model, ModelCapability, ModelType, ModelParamOverrides, ProviderType } from '@/types';
 
 const { Text, Title } = Typography;
@@ -166,7 +167,13 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [editCapabilities, setEditCapabilities] = useState<ModelCapability[]>([]);
   const [editModelType, setEditModelType] = useState<ModelType>('Chat');
   const [editMaxTokens, setEditMaxTokens] = useState<number | null>(null);
-  const [paramForm] = Form.useForm();
+  const [editTemperature, setEditTemperature] = useState(0.7);
+  const [editMaxTokensParam, setEditMaxTokensParam] = useState(4096);
+  const [editTopP, setEditTopP] = useState(1.0);
+  const [editFreqPenalty, setEditFreqPenalty] = useState(0.0);
+  const [editUseMaxCompletionTokens, setEditUseMaxCompletionTokens] = useState(false);
+  const [editNoSystemRole, setEditNoSystemRole] = useState(false);
+  const [editForceMaxTokens, setEditForceMaxTokens] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconOverrides, setIconOverrides] = useState<Record<string, string>>({});
   const [apiHostLocal, setApiHostLocal] = useState(provider?.api_host ?? '');
@@ -473,23 +480,29 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       setEditCapabilities(sanitizeModelCapabilities(nextModelType, model.capabilities));
       setEditModelType(nextModelType);
       setEditMaxTokens(model.max_tokens ?? 128000);
-      paramForm.setFieldsValue({
-        temperature: model.param_overrides?.temperature ?? 0.7,
-        max_tokens: model.param_overrides?.max_tokens ?? 4096,
-        top_p: model.param_overrides?.top_p ?? 1.0,
-        frequency_penalty: model.param_overrides?.frequency_penalty ?? 0.0,
-        use_max_completion_tokens: model.param_overrides?.use_max_completion_tokens ?? false,
-        no_system_role: model.param_overrides?.no_system_role ?? false,
-        force_max_tokens: model.param_overrides?.force_max_tokens ?? false,
-      });
+      setEditTemperature(model.param_overrides?.temperature ?? 0.7);
+      setEditMaxTokensParam(model.param_overrides?.max_tokens ?? 4096);
+      setEditTopP(model.param_overrides?.top_p ?? 1.0);
+      setEditFreqPenalty(model.param_overrides?.frequency_penalty ?? 0.0);
+      setEditUseMaxCompletionTokens(model.param_overrides?.use_max_completion_tokens ?? false);
+      setEditNoSystemRole(model.param_overrides?.no_system_role ?? false);
+      setEditForceMaxTokens(model.param_overrides?.force_max_tokens ?? false);
       setSettingsModalOpen(true);
     },
-    [paramForm],
+    [],
   );
 
   const handleSaveSettings = useCallback(async () => {
     if (!editingModel) return;
-    const values = paramForm.getFieldsValue() as ModelParamOverrides;
+    const values: ModelParamOverrides = {
+      temperature: editTemperature,
+      max_tokens: editMaxTokensParam,
+      top_p: editTopP,
+      frequency_penalty: editFreqPenalty,
+      use_max_completion_tokens: editUseMaxCompletionTokens,
+      no_system_role: editNoSystemRole,
+      force_max_tokens: editForceMaxTokens,
+    };
     const nextCapabilities = sanitizeModelCapabilities(editModelType, editCapabilities);
     try {
       await updateModelParams(providerId, editingModel.model_id, values);
@@ -505,7 +518,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     } catch {
       message.error(t('error.saveFailed'));
     }
-  }, [editingModel, editCapabilities, editModelType, editMaxTokens, providerId, paramForm, updateModelParams, saveModels, provider?.models, message, t]);
+  }, [editingModel, editCapabilities, editModelType, editMaxTokens, editTemperature, editMaxTokensParam, editTopP, editFreqPenalty, editUseMaxCompletionTokens, editNoSystemRole, editForceMaxTokens, providerId, updateModelParams, saveModels, provider?.models, message, t]);
 
   const handleApiHostChange = useCallback(
     (value: string) => {
@@ -1224,43 +1237,46 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       >
         {editingModel && (
           <div data-os-scrollbar style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 }}>
-          <div className="space-y-4">
-            {/* Model Icon + Name */}
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="cursor-pointer rounded-lg p-1 transition-colors hover:bg-gray-100"
-                onClick={() => setIconPickerOpen(true)}
-                title={t('settings.chooseIcon')}
-              >
-                <ModelIcon
-                  model={iconOverrides[editingModel.model_id] ?? editingModel.model_id}
-                  size={32}
-                  type="avatar"
-                />
-              </div>
-              <div>
-                <div className="font-medium">{editingModel.name || editingModel.model_id}</div>
-                <div className="flex items-center gap-1">
-                  <Text type="secondary" className="text-sm">{editingModel.model_id}</Text>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<Copy size={14} />}
-                    onClick={() => {
-                      navigator.clipboard.writeText(editingModel.model_id);
-                      message.success(t('common.copySuccess'));
-                    }}
+          <div className="space-y-3">
+            {/* Model Icon + Name + ID */}
+            <div className="flex items-center gap-3">
+              <AvatarEditBadge size={32}>
+                <div
+                  className="cursor-pointer rounded-lg p-1 transition-colors hover:bg-gray-100"
+                  onClick={() => setIconPickerOpen(true)}
+                  title={t('settings.chooseIcon')}
+                >
+                  <ModelIcon
+                    model={iconOverrides[editingModel.model_id] ?? editingModel.model_id}
+                    size={32}
+                    type="avatar"
                   />
                 </div>
+              </AvatarEditBadge>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span className="font-medium truncate">{editingModel.name || editingModel.model_id}</span>
+                {editingModel.name && (
+                  <span className="text-xs shrink-0" style={{ color: token.colorTextSecondary }}>({editingModel.model_id})</span>
+                )}
+                <Button
+                  type="text"
+                  size="small"
+                  className="shrink-0"
+                  icon={<Copy size={12} />}
+                  onClick={() => {
+                    navigator.clipboard.writeText(editingModel.model_id);
+                    message.success(t('common.copySuccess'));
+                  }}
+                />
               </div>
             </div>
 
-            <Divider className="my-3" />
+            <Divider className="!my-2" />
 
             {/* Model Type */}
             <div>
-              <div className="font-medium mb-2">{t('settings.modelType.title', '模型类型')}</div>
-              <div className="flex gap-2">
+              <div className="font-medium mb-1.5" style={{ fontSize: 13 }}>{t('settings.modelType.title', '模型类型')}</div>
+              <div className="flex gap-2 flex-wrap">
                 {(Object.keys(MODEL_TYPE_CONFIG) as ModelType[]).map((type_) => (
                   <Tag
                     key={type_}
@@ -1280,76 +1296,102 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
 
             {editModelType === 'Chat' && (
               <>
-                <Divider className="my-3" />
+                <Divider className="!my-2" />
 
-                {/* Capabilities */}
+                {/* Capabilities as clickable tags */}
                 <div>
-                  <div className="font-medium mb-2">{t('settings.modelAbilities')}</div>
-                  <Checkbox.Group
-                    value={editCapabilities}
-                    onChange={(vals) =>
-                      setEditCapabilities(sanitizeModelCapabilities(editModelType, vals as ModelCapability[]))
-                    }
-                  >
-                    <div className="grid grid-cols-2 gap-2">
-                      {getEditableCapabilities(editModelType).map((cap) => (
-                        <Checkbox key={cap} value={cap}>
-                          <Tag color={CAPABILITY_COLORS[cap]} bordered={false}>
-                            {t(`settings.capability.${cap}`, CAPABILITY_LABEL_KEYS[cap])}
-                          </Tag>
-                        </Checkbox>
-                      ))}
-                    </div>
-                  </Checkbox.Group>
+                  <div className="font-medium mb-1.5" style={{ fontSize: 13 }}>{t('settings.modelAbilities')}</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {getEditableCapabilities(editModelType).map((cap) => {
+                      const selected = editCapabilities.includes(cap);
+                      return (
+                        <Tag
+                          key={cap}
+                          color={selected ? CAPABILITY_COLORS[cap] : 'default'}
+                          style={{ cursor: 'pointer', fontSize: 12, opacity: selected ? 1 : 0.6 }}
+                          onClick={() => {
+                            const next = selected
+                              ? editCapabilities.filter((c) => c !== cap)
+                              : [...editCapabilities, cap];
+                            setEditCapabilities(sanitizeModelCapabilities(editModelType, next));
+                          }}
+                        >
+                          {CAPABILITY_ICONS[cap]}
+                          <span style={{ marginLeft: 4 }}>{t(`settings.capability.${cap}`, CAPABILITY_LABEL_KEYS[cap])}</span>
+                        </Tag>
+                      );
+                    })}
+                  </div>
                 </div>
               </>
             )}
 
-            <Divider className="my-3" />
+            <Divider className="!my-2" />
 
-            {/* Context Window */}
+            {/* Parameters — horizontal label-control layout */}
             <div>
-              <div className="font-medium mb-2">{t('settings.contextWindow')}</div>
-              <InputNumber
-                value={editMaxTokens}
-                onChange={(v) => setEditMaxTokens(v)}
-                min={1024}
-                max={10000000}
-                step={1024}
-                style={{ width: '100%' }}
-                addonAfter="tokens"
-                formatter={(v) => v ? `${Number(v).toLocaleString()}` : ''}
-              />
-            </div>
+              <div className="font-medium mb-2" style={{ fontSize: 13 }}>{t('settings.modelParams')}</div>
+              <div className="space-y-3">
+                {/* Context Window */}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm shrink-0" style={{ color: token.colorText }}>{t('settings.contextWindow')}</span>
+                  <InputNumber
+                    value={editMaxTokens}
+                    onChange={(v) => setEditMaxTokens(v)}
+                    min={1024}
+                    max={100000000}
+                    step={1024}
+                    style={{ width: 180 }}
+                    size="small"
+                    addonAfter="tokens"
+                    formatter={(v) => v ? `${Number(v).toLocaleString()}` : ''}
+                  />
+                </div>
 
-            <Divider className="my-3" />
+                {/* Temperature */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm shrink-0" style={{ color: token.colorText, width: 80 }}>{t('settings.temperature')}</span>
+                  <Slider style={{ flex: 1 }} min={0} max={2} step={0.1} marks={{ 0: '0', 0.5: '', 1: '1', 1.5: '', 2: '2' }} value={editTemperature} onChange={setEditTemperature} />
+                  <InputNumber style={{ width: 60 }} min={0} max={2} step={0.1} size="small" value={editTemperature} onChange={(v) => setEditTemperature(v ?? 0)} />
+                </div>
 
-            {/* Parameters */}
-            <div>
-              <div className="font-medium mb-2">{t('settings.modelParams')}</div>
-              <Form form={paramForm} layout="vertical" size="small">
-                <Form.Item name="temperature" label={t('settings.temperature')}>
-                  <Slider min={0} max={2} step={0.1} />
-                </Form.Item>
-                <Form.Item name="max_tokens" label={t('settings.maxTokens')}>
-                  <Slider min={256} max={32768} step={256} />
-                </Form.Item>
-                <Form.Item name="top_p" label={t('settings.topP')}>
-                  <Slider min={0} max={1} step={0.05} />
-                </Form.Item>
-                <Form.Item name="frequency_penalty" label={t('settings.frequencyPenalty')}>
-                  <Slider min={-2} max={2} step={0.1} />
-                </Form.Item>
-                <Form.Item name="use_max_completion_tokens" label={t('settings.useMaxCompletionTokens', '使用 max_completion_tokens')} valuePropName="checked">
-                  <Switch />
-                </Form.Item>
-                <Form.Item name="no_system_role" label={t('settings.noSystemRole', '不支持 System 角色')} valuePropName="checked">
-                  <Switch />
-                </Form.Item>
-                <Form.Item name="force_max_tokens" label={t('settings.forceMaxTokens', '强制 Max Tokens')} valuePropName="checked">
-                  <Switch />
-                </Form.Item>
-              </Form>
+                {/* Max Tokens */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm shrink-0" style={{ color: token.colorText, width: 80 }}>{t('settings.maxTokens')}</span>
+                  <Slider style={{ flex: 1 }} min={256} max={32768} step={256} marks={{ 256: '', 8192: '8K', 16384: '16K', 32768: '32K' }} value={editMaxTokensParam} onChange={setEditMaxTokensParam} />
+                  <InputNumber style={{ width: 70 }} min={256} max={32768} step={256} size="small" value={editMaxTokensParam} onChange={(v) => setEditMaxTokensParam(v ?? 256)} />
+                </div>
+
+                {/* Top P */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm shrink-0" style={{ color: token.colorText, width: 80 }}>Top P</span>
+                  <Slider style={{ flex: 1 }} min={0} max={1} step={0.05} marks={{ 0: '0', 0.5: '', 1: '1' }} value={editTopP} onChange={setEditTopP} />
+                  <InputNumber style={{ width: 60 }} min={0} max={1} step={0.05} size="small" value={editTopP} onChange={(v) => setEditTopP(v ?? 0)} />
+                </div>
+
+                {/* Frequency Penalty */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm shrink-0" style={{ color: token.colorText, width: 80 }}>{t('settings.frequencyPenalty')}</span>
+                  <Slider style={{ flex: 1 }} min={-2} max={2} step={0.1} marks={{ '-2': '-2', 0: '0', 2: '2' }} value={editFreqPenalty} onChange={setEditFreqPenalty} />
+                  <InputNumber style={{ width: 60 }} min={-2} max={2} step={0.1} size="small" value={editFreqPenalty} onChange={(v) => setEditFreqPenalty(v ?? 0)} />
+                </div>
+
+                <Divider className="!my-2" />
+
+                {/* Switches — horizontal */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm" style={{ color: token.colorText }}>{t('settings.useMaxCompletionTokens', '使用 max_completion_tokens')}</span>
+                  <Switch size="small" checked={editUseMaxCompletionTokens} onChange={setEditUseMaxCompletionTokens} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm" style={{ color: token.colorText }}>{t('settings.noSystemRole', '不支持 System 角色')}</span>
+                  <Switch size="small" checked={editNoSystemRole} onChange={setEditNoSystemRole} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm" style={{ color: token.colorText }}>{t('settings.forceMaxTokens', '强制 Max Tokens')}</span>
+                  <Switch size="small" checked={editForceMaxTokens} onChange={setEditForceMaxTokens} />
+                </div>
+              </div>
             </div>
           </div>
           </div>
