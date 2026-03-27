@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { TitleBar } from '@/components/layout/TitleBar';
 import { ContentArea } from '@/components/layout/ContentArea';
 import CommandPalette from '@/components/layout/CommandPalette';
+import { GlobalCopyMenu } from '@/components/layout/GlobalCopyMenu';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { useUIStore, useSettingsStore, useConversationStore } from '@/stores';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -140,6 +141,7 @@ function AppInner() {
     <div className="flex flex-col h-screen" style={{ backgroundColor: token.colorBgContainer }}>
       <TitleBar />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+      <GlobalCopyMenu />
       <Layout className="flex-1 overflow-hidden" style={{ backgroundColor: 'transparent' }}>
         {!isInSettings && (
           <Sider

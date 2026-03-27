@@ -181,3 +181,8 @@ svg.lucide {
   box-shadow: none !important;
   transform: none !important;
 }
+
+/* ModelSelector: compact modal content padding */
+.model-selector-modal .ant-modal-container {
+  padding: 6px !important;
+}

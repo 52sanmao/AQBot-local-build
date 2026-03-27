@@ -1,12 +1,29 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Tag, Modal, Input, theme, Tooltip } from 'antd';
-import { Search, Settings, Pin, PinOff } from 'lucide-react';
+import { Search, Settings, Pin, PinOff, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Eye, Wrench, Lightbulb, Mic, MessageSquare } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { useTranslation } from 'react-i18next';
 import { useProviderStore, useConversationStore, useSettingsStore, useUIStore } from '@/stores';
 import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { getVisibleModelCapabilities } from '@/lib/modelCapabilities';
+import type { ModelCapability, Model } from '@/types';
 
 const PINNED_MODELS_KEY = 'aqbot_pinned_models';
+
+const CAPABILITY_COLORS: Record<ModelCapability, string> = {
+  TextChat: 'blue', Vision: 'green', FunctionCalling: 'purple', Reasoning: 'orange', RealtimeVoice: 'red',
+};
+const CAPABILITY_ICONS: Record<ModelCapability, React.ReactNode> = {
+  TextChat: <MessageSquare size={11} />, Vision: <Eye size={11} />, FunctionCalling: <Wrench size={11} />,
+  Reasoning: <Lightbulb size={11} />, RealtimeVoice: <Mic size={11} />,
+};
+
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1000000) { const m = tokens / 1000000; return m % 1 === 0 ? `${m}M` : `${m.toFixed(1)}M`; }
+  if (tokens >= 1000) { const k = tokens / 1000; return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`; }
+  return `${tokens}`;
+}
 
 function loadPinnedModels(): string[] {
   try {
@@ -52,6 +69,8 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
   const [search, setSearch] = useState('');
   const [pinnedModels, setPinnedModels] = useState<string[]>(loadPinnedModels);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const listParentRef = useRef<HTMLDivElement>(null);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setSettingsSection = useUIStore((s) => s.setSettingsSection);
   const setSelectedProviderId = useUIStore((s) => s.setSelectedProviderId);
@@ -89,12 +108,12 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
 
   // All enabled models flat list (for pinned section)
   const allEnabledModels = useMemo(() => {
-    const result: { pid: string; mid: string; name: string; providerName: string }[] = [];
+    const result: { pid: string; mid: string; name: string; providerName: string; model: Model }[] = [];
     for (const p of providers) {
       if (!p.enabled) continue;
       for (const m of p.models) {
         if (!m.enabled) continue;
-        result.push({ pid: p.id, mid: m.model_id, name: m.name, providerName: p.name });
+        result.push({ pid: p.id, mid: m.model_id, name: m.name, providerName: p.name, model: m });
       }
     }
     return result;
@@ -161,40 +180,125 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
     };
   }, [open, setOpen]);
 
-  const renderModelRow = (
+  // Auto-expand all groups when providers change or modal opens
+  const providerIds = useMemo(() => filteredProviders.map((p) => p.id), [filteredProviders]);
+  useEffect(() => {
+    if (open) setExpandedGroups(providerIds);
+  }, [open, providerIds]);
+
+  const allGroupsExpanded = expandedGroups.length >= providerIds.length;
+
+  const toggleGroupExpand = useCallback((providerId: string) => {
+    setExpandedGroups((prev) =>
+      prev.includes(providerId) ? prev.filter((id) => id !== providerId) : [...prev, providerId],
+    );
+  }, []);
+
+  const toggleAllGroups = useCallback(() => {
+    setExpandedGroups((prev) => (prev.length >= providerIds.length ? [] : [...providerIds]));
+    listParentRef.current?.scrollTo({ top: 0 });
+  }, [providerIds]);
+
+  // Flatten into virtualizable rows
+  type ListRow =
+    | { type: 'pinned-header' }
+    | { type: 'pinned-model'; pid: string; mid: string; name: string; providerName: string; key: string; model: Model }
+    | { type: 'pinned-divider' }
+    | { type: 'group'; provider: typeof filteredProviders[number] }
+    | { type: 'model'; providerId: string; model: typeof filteredProviders[number]['models'][number]; providerName: string };
+
+  const flatRows = useMemo<ListRow[]>(() => {
+    const rows: ListRow[] = [];
+    if (pinnedItems.length > 0) {
+      rows.push({ type: 'pinned-header' });
+      for (const item of pinnedItems) {
+        rows.push({ type: 'pinned-model', ...item });
+      }
+      rows.push({ type: 'pinned-divider' });
+    }
+    for (const provider of filteredProviders) {
+      rows.push({ type: 'group', provider });
+      if (expandedGroups.includes(provider.id)) {
+        for (const model of provider.models) {
+          rows.push({ type: 'model', providerId: provider.id, model, providerName: provider.name });
+        }
+      }
+    }
+    return rows;
+  }, [pinnedItems, filteredProviders, expandedGroups]);
+
+  const virtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => listParentRef.current,
+    estimateSize: (index) => {
+      const row = flatRows[index];
+      if (row.type === 'pinned-divider') return 12;
+      if (row.type === 'pinned-header') return 32;
+      if (row.type === 'group') return 40;
+      return 36;
+    },
+    getItemKey: (index) => {
+      const row = flatRows[index];
+      switch (row.type) {
+        case 'pinned-header': return 'ph';
+        case 'pinned-divider': return 'pd';
+        case 'pinned-model': return `pm-${row.key}`;
+        case 'group': return `g-${row.provider.id}`;
+        case 'model': return `m-${row.providerId}::${row.model.model_id}`;
+      }
+    },
+    overscan: 10,
+  });
+
+  const renderModelItem = (
     providerId: string,
     modelId: string,
     modelName: string,
     providerName: string,
     isPinned: boolean,
     showProviderTag: boolean,
+    model?: Model,
   ) => {
     const key = `${providerId}::${modelId}`;
     const isActive = currentValue === key;
     const isHovered = hoveredKey === key;
+    const visibleCaps = model ? getVisibleModelCapabilities(model) : [];
     return (
       <div
-        key={key}
-        className="flex items-center gap-3 cursor-pointer"
+        className="flex items-center gap-2 cursor-pointer"
         style={{
           backgroundColor: isActive ? token.colorPrimaryBg : isHovered ? token.colorFillSecondary : undefined,
-          borderRadius: 8,
-          margin: '0 8px',
-          padding: '8px 12px',
+          borderRadius: 6,
+          margin: '0 6px',
+          padding: '5px 10px',
           transition: 'background-color 0.15s',
         }}
         onClick={() => handleSelect(providerId, modelId)}
         onMouseEnter={() => setHoveredKey(key)}
         onMouseLeave={() => setHoveredKey(null)}
       >
-        <ModelIcon model={modelId} size={22} type="avatar" />
-        <span className="flex items-center gap-1.5" style={{ flex: 1, minWidth: 0 }}>
-          {showProviderTag && providerName && (
-            <Tag style={{ fontSize: 11, margin: 0, padding: '0 4px', lineHeight: '18px', flexShrink: 0, color: token.colorPrimary, backgroundColor: token.colorPrimaryBg, border: 'none' }}>{providerName}</Tag>
-          )}
-          <span style={{ fontSize: 14, color: isActive ? token.colorPrimary : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{modelName}</span>
-        </span>
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <ModelIcon model={modelId} size={20} type="avatar" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1 flex-wrap">
+            {showProviderTag && providerName && (
+              <Tag style={{ fontSize: 11, margin: 0, padding: '0 4px', lineHeight: '18px', flexShrink: 0, color: token.colorPrimary, backgroundColor: token.colorPrimaryBg, border: 'none' }}>{providerName}</Tag>
+            )}
+            <span style={{ fontSize: 13, color: isActive ? token.colorPrimary : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{modelName}</span>
+            {visibleCaps.map((cap) => (
+              <Tooltip key={cap} title={t(`settings.capability.${cap}`, cap)}>
+                <Tag color={CAPABILITY_COLORS[cap]} bordered={false} style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>
+                  {CAPABILITY_ICONS[cap]}
+                </Tag>
+              </Tooltip>
+            ))}
+            {model?.max_tokens != null && model.max_tokens > 0 && (
+              <Tag bordered={false} color="default" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>
+                {formatTokenCount(model.max_tokens)}
+              </Tag>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1" style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
           <span
             style={{ cursor: 'pointer', color: isPinned ? token.colorPrimary : token.colorTextQuaternary, fontSize: 14 }}
             onClick={() => togglePin(key)}
@@ -245,14 +349,15 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
         footer={null}
         title={null}
         closable={false}
-        width={480}
+        width={420}
         styles={{
           body: { padding: 0, maxHeight: '60vh', display: 'flex', flexDirection: 'column' },
         }}
+        rootClassName="model-selector-modal"
         style={{ borderRadius: 12 }}
       >
-        {/* Search */}
-        <div style={{ padding: '12px 16px 8px' }}>
+        {/* Search + Expand/Collapse */}
+        <div className="flex items-center gap-2" style={{ padding: '8px 8px 4px' }}>
           <Input
             prefix={<Search size={14} style={{ color: token.colorTextSecondary }} />}
             placeholder={t('chat.searchModelOrProvider', '搜索模型或服务商')}
@@ -261,56 +366,140 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
             style={{
+              flex: 1,
               borderRadius: 8,
               backgroundColor: token.colorFillTertiary,
             }}
           />
+          <Tooltip title={allGroupsExpanded ? t('common.collapseAll', '全部收起') : t('common.expandAll', '全部展开')}>
+            <span
+              style={{ cursor: 'pointer', color: token.colorTextSecondary, flexShrink: 0, display: 'flex', alignItems: 'center', padding: 4 }}
+              onClick={toggleAllGroups}
+            >
+              {allGroupsExpanded ? <ChevronsDownUp size={16} /> : <ChevronsUpDown size={16} />}
+            </span>
+          </Tooltip>
         </div>
 
-        {/* Model list */}
-        <div data-os-scrollbar style={{ overflowY: 'auto', flex: 1, padding: '4px 0 12px' }}>
-          {/* Pinned section */}
-          {pinnedItems.length > 0 && (
-            <div>
-              <div
-                className="flex items-center px-4 pt-3 pb-1"
-                style={{ color: token.colorTextSecondary, fontSize: 13, fontWeight: 500 }}
-              >
-                <PinOff size={12} style={{ marginRight: 4 }} />
-                <span>{t('chat.pinnedModels', '置顶模型')}</span>
-              </div>
-              {pinnedItems.map((item) =>
-                renderModelRow(item.pid, item.mid, item.name, item.providerName, true, true),
-              )}
-              <div style={{ margin: '8px 16px 4px', borderTop: `1px solid ${token.colorBorderSecondary}` }} />
-            </div>
-          )}
+        {/* Virtualized model list */}
+        <div
+          ref={listParentRef}
+          data-os-scrollbar
+          style={{ overflowY: 'auto', flex: 1, padding: '2px 0 4px' }}
+        >
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = flatRows[virtualRow.index];
 
-          {/* Provider groups */}
-          {filteredProviders.map((provider) => (
-            <div key={provider.id}>
-              <div
-                className="flex items-center justify-between px-4 pt-3 pb-1"
-                style={{ color: token.colorTextSecondary, fontSize: 13, fontWeight: 500 }}
-              >
-                <span>{provider.name}</span>
-                <Settings
-                  size={14}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => {
-                    setOpen(false);
-                    setSearch('');
-                    setActivePage('settings');
-                    setSettingsSection('providers');
-                    setSelectedProviderId(provider.id);
+              if (row.type === 'pinned-header') {
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    className="flex items-center px-3 pt-2 pb-0.5"
+                    style={{
+                      position: 'absolute', top: 0, left: 0, width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                      color: token.colorTextSecondary, fontSize: 12, fontWeight: 500,
+                    }}
+                  >
+                    <PinOff size={11} style={{ marginRight: 4 }} />
+                    <span>{t('chat.pinnedModels', '置顶模型')}</span>
+                  </div>
+                );
+              }
+
+              if (row.type === 'pinned-model') {
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute', top: 0, left: 0, width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {renderModelItem(row.pid, row.mid, row.name, row.providerName, true, true, row.model)}
+                  </div>
+                );
+              }
+
+              if (row.type === 'pinned-divider') {
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute', top: 0, left: 0, width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                      padding: '4px 14px',
+                    }}
+                  >
+                    <div style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }} />
+                  </div>
+                );
+              }
+
+              if (row.type === 'group') {
+                const isExpanded = expandedGroups.includes(row.provider.id);
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute', top: 0, left: 0, width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                      padding: '2px 6px',
+                    }}
+                  >
+                    <div
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer"
+                      style={{ userSelect: 'none', background: 'var(--ant-color-fill-quaternary, rgba(0,0,0,0.02))' }}
+                      onClick={() => toggleGroupExpand(row.provider.id)}
+                    >
+                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      <ModelIcon model={row.provider.models[0]?.model_id ?? row.provider.name} size={20} type="avatar" />
+                      <span style={{ fontWeight: 600 }}>{row.provider.name}</span>
+                      <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px', margin: 0 }}>{row.provider.models.length}</Tag>
+                      <div style={{ flex: 1 }} />
+                      <Settings
+                        size={14}
+                        style={{ cursor: 'pointer', color: token.colorTextQuaternary }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpen(false);
+                          setSearch('');
+                          setActivePage('settings');
+                          setSettingsSection('providers');
+                          setSelectedProviderId(row.provider.id);
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              // type === 'model'
+              const isPinned = pinnedModels.includes(`${row.providerId}::${row.model.model_id}`);
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute', top: 0, left: 0, width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
                   }}
-                />
-              </div>
-              {provider.models.map((model) =>
-                renderModelRow(provider.id, model.model_id, model.name, provider.name, pinnedModels.includes(`${provider.id}::${model.model_id}`), false),
-              )}
-            </div>
-          ))}
+                >
+                  {renderModelItem(row.providerId, row.model.model_id, row.model.name, row.providerName, isPinned, false, row.model)}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </Modal>
     </>
