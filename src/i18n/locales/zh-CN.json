@@ -85,6 +85,7 @@
     "welcomePrompt4": "解释概念",
     "sendMessage": "发送消息",
     "attachFile": "附加文件",
+    "dropToAttach": "拖放文件以添加附件",
     "attachmentOpen": "打开",
     "attachmentRevealInFinder": "在 Finder 中显示",
     "attachmentNotFound": "文件不存在",

@@ -85,6 +85,7 @@
     "welcomePrompt4": "Explain a concept",
     "sendMessage": "Send message",
     "attachFile": "Attach file",
+    "dropToAttach": "Drop files to attach",
     "attachmentOpen": "Open",
     "attachmentRevealInFinder": "Reveal in Finder",
     "attachmentNotFound": "File not found",

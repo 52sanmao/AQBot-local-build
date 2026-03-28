@@ -1,11 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Button, Tooltip, App, theme, Dropdown, Tag, Popover, Checkbox } from 'antd';
 import type { MenuProps } from 'antd';
-import { Paperclip, Trash2, Mic, Eraser, Scissors, Globe, Brain, BrainCog, Plug, SlidersHorizontal, ArrowUp, Square, Check, Zap, ZapOff, Gauge, Shrink } from 'lucide-react';
+import { Paperclip, Trash2, Mic, Eraser, Scissors, Globe, Brain, BrainCog, Plug, SlidersHorizontal, ArrowUp, Square, Check, Zap, ZapOff, Gauge, Shrink, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useConversationStore, useProviderStore, useSettingsStore, useSearchStore, useMcpStore } from '@/stores';
 import { useUIStore } from '@/stores/uiStore';
-import { findModelByIds, supportsReasoning } from '@/lib/modelCapabilities';
+import { findModelByIds, supportsReasoning, modelHasCapability } from '@/lib/modelCapabilities';
 import { estimateMessageTokens, estimateTokens } from '@/lib/tokenEstimator';
 import { McpServerIcon } from '@/components/shared/McpServerIcon';
 import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
@@ -411,11 +411,12 @@ export function InputArea() {
     return { usedTokens, maxTokens, percent };
   }, [messages, currentModel?.max_tokens, activeConversation?.system_prompt, summaryTokenCount]);
 
-  const { hasRealtimeVoice, hasReasoning } = React.useMemo(() => ({
+  const { hasRealtimeVoice, hasReasoning, hasVision } = React.useMemo(() => ({
     hasRealtimeVoice: activeConversation
       ? !!findModelByIds(providers, activeConversation.provider_id, activeConversation.model_id)?.capabilities.includes('RealtimeVoice')
       : false,
     hasReasoning: supportsReasoning(currentModel),
+    hasVision: modelHasCapability(currentModel, 'Vision'),
   }), [activeConversation, currentModel, providers]);
 
   const voiceConfig: RealtimeConfig = React.useMemo(
@@ -505,6 +506,78 @@ export function InputArea() {
   const removeFile = useCallback((index: number) => {
     setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!hasVision) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const item of items) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      setAttachedFiles((prev) => [...prev, ...files]);
+    }
+  }, [hasVision]);
+
+  // Drag-and-drop overlay (Tauri native)
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (!hasVision) return;
+
+    let unlisten: (() => void) | undefined;
+
+    (async () => {
+      const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+      const { readFile } = await import('@tauri-apps/plugin-fs');
+
+      unlisten = await getCurrentWebview().onDragDropEvent(async (event) => {
+        const { type } = event.payload;
+        if (type === 'enter') {
+          setIsDragging(true);
+        } else if (type === 'leave') {
+          setIsDragging(false);
+        } else if (type === 'drop') {
+          setIsDragging(false);
+          const { paths } = event.payload;
+          const files: File[] = [];
+          for (const filePath of paths) {
+            try {
+              const fileName = filePath.split(/[\\/]/).pop() || 'file';
+              const ext = fileName.split('.').pop()?.toLowerCase() || '';
+              const mimeMap: Record<string, string> = {
+                png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+                gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+                bmp: 'image/bmp', ico: 'image/x-icon',
+                pdf: 'application/pdf', txt: 'text/plain',
+                json: 'application/json', csv: 'text/csv',
+                md: 'text/markdown', html: 'text/html',
+                js: 'text/javascript', ts: 'text/typescript',
+                zip: 'application/zip',
+              };
+              const mimeType = mimeMap[ext] || 'application/octet-stream';
+              const bytes = await readFile(filePath);
+              files.push(new File([bytes], fileName, { type: mimeType }));
+            } catch (err) {
+              console.error('[drag-drop] Failed to read file:', filePath, err);
+            }
+          }
+          if (files.length > 0) {
+            setAttachedFiles((prev) => [...prev, ...files]);
+          }
+        }
+      });
+    })();
+
+    return () => {
+      unlisten?.();
+    };
+  }, [hasVision]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -641,6 +714,7 @@ export function InputArea() {
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={t('chat.inputPlaceholder')}
           rows={1}
           style={{
@@ -724,14 +798,16 @@ export function InputArea() {
                 </Tooltip>
               </Dropdown>
             )}
-            <Tooltip title={t('chat.attachFile')}>
-              <Button
-                type="text"
-                size="small"
-                icon={<Paperclip size={14} />}
-                onClick={handleFileSelect}
-              />
-            </Tooltip>
+            {hasVision && (
+              <Tooltip title={t('chat.attachFile')}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<Paperclip size={14} />}
+                  onClick={handleFileSelect}
+                />
+              </Tooltip>
+            )}
             <Popover
               trigger="click"
               placement="topLeft"
@@ -907,6 +983,40 @@ export function InputArea() {
           onClose={() => setVoiceCallVisible(false)}
           config={voiceConfig}
         />
+      )}
+
+      {/* Drag-and-drop overlay */}
+      {isDragging && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+              padding: '40px 60px',
+              borderRadius: 16,
+              border: `2px dashed ${token.colorPrimary}`,
+              backgroundColor: token.colorBgElevated,
+            }}
+          >
+            <Upload size={48} style={{ color: token.colorPrimary }} />
+            <span style={{ fontSize: 16, fontWeight: 500, color: token.colorText }}>
+              {t('chat.dropToAttach', '拖放文件以添加附件')}
+            </span>
+          </div>
+        </div>
       )}
     </div>
   );
