@@ -7,14 +7,14 @@ const rootPkg = JSON.parse(
 );
 const APP_VERSION = rootPkg.version as string;
 
-const SITE_URL = 'https://aqbot.top';
+const SITE_URL = 'https://app.aqbot.top';
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
 
 export default defineConfig({
   title: 'AQBot',
   description: 'AQBot — Open-source AI desktop client with built-in AI gateway, multi-model chat, MCP server support. Connect OpenAI, Claude, Gemini and more LLMs in one app.',
 
-  base: '/AQBot/',
+  base: '/',
 
   lastUpdated: true,
   cleanUrls: true,
