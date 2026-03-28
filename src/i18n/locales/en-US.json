@@ -539,7 +539,13 @@
       "customHeaders": "Custom Headers",
       "envVars": "Environment Variables",
       "envVarsPlaceholder": "One per line, format: KEY=VALUE",
-      "resetIcon": "Reset to Default"
+      "resetIcon": "Reset to Default",
+      "tabForm": "Form",
+      "tabImport": "Import",
+      "importPlaceholder": "Paste JSON config, e.g.:\n{\n  \"mcpServers\": {\n    \"server-name\": {\n      \"command\": \"uvx\",\n      \"args\": [\"mcp-server-fetch\"]\n    }\n  }\n}",
+      "importParseError": "Invalid JSON format",
+      "importEmpty": "No valid MCP server config found",
+      "importSuccess": "Successfully imported {{count}} server(s)"
     },
     "knowledge": {
       "title": "Knowledge Base",

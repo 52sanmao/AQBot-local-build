@@ -539,7 +539,13 @@
       "customHeaders": "自定义请求头",
       "envVars": "环境变量",
       "envVarsPlaceholder": "每行一个，格式：KEY=VALUE",
-      "resetIcon": "恢复默认图标"
+      "resetIcon": "恢复默认图标",
+      "tabForm": "表单创建",
+      "tabImport": "导入创建",
+      "importPlaceholder": "粘贴 JSON 配置，例如：\n{\n  \"mcpServers\": {\n    \"server-name\": {\n      \"command\": \"uvx\",\n      \"args\": [\"mcp-server-fetch\"]\n    }\n  }\n}",
+      "importParseError": "JSON 格式无效",
+      "importEmpty": "未找到有效的 MCP 服务器配置",
+      "importSuccess": "成功导入 {{count}} 个服务器"
     },
     "knowledge": {
       "title": "知识库",

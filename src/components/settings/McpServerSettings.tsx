@@ -10,6 +10,7 @@ import {
   Switch,
   Divider,
   Tag,
+  Tabs,
   Typography,
   Popconfirm,
   Collapse,
@@ -548,6 +549,9 @@ export default function McpServerSettings() {
   const { servers, loadServers, createServer, updateServer, discoverTools } = useMcpStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<'form' | 'import'>('form');
+  const [importJson, setImportJson] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
   const [form] = Form.useForm();
   const transport = Form.useWatch('transport', form);
 
@@ -588,7 +592,54 @@ export default function McpServerSettings() {
   const handleAdd = () => {
     form.resetFields();
     form.setFieldsValue({ transport: 'stdio' });
+    setModalTab('form');
+    setImportJson('');
+    setImportError(null);
     setModalOpen(true);
+  };
+
+  const parseImportJson = (raw: string): CreateMcpServerInput[] => {
+    const obj = JSON.parse(raw);
+    const serversObj = obj.mcpServers ?? obj;
+    const results: CreateMcpServerInput[] = [];
+    for (const [name, cfg] of Object.entries(serversObj)) {
+      const c = cfg as Record<string, unknown>;
+      let transport: 'stdio' | 'http' | 'sse';
+      if (c.type === 'streamable_http') transport = 'http';
+      else if (c.type === 'sse') transport = 'sse';
+      else if (c.command) transport = 'stdio';
+      else continue;
+      results.push({
+        name,
+        transport,
+        command: typeof c.command === 'string' ? c.command : undefined,
+        args: Array.isArray(c.args) ? c.args.filter((a): a is string => typeof a === 'string') : undefined,
+        endpoint: typeof c.url === 'string' ? c.url : undefined,
+        enabled: false,
+      });
+    }
+    return results;
+  };
+
+  const handleImportCreate = async () => {
+    let inputs: CreateMcpServerInput[];
+    try {
+      inputs = parseImportJson(importJson);
+    } catch {
+      setImportError(t('settings.mcpServers.importParseError'));
+      return;
+    }
+    if (inputs.length === 0) {
+      setImportError(t('settings.mcpServers.importEmpty'));
+      return;
+    }
+    for (const input of inputs) {
+      await createServer(input);
+    }
+    message.success(t('settings.mcpServers.importSuccess', { count: inputs.length }));
+    setModalOpen(false);
+    setImportJson('');
+    setImportError(null);
   };
 
   const handleCreate = async () => {
@@ -644,37 +695,68 @@ export default function McpServerSettings() {
       <Modal
         title={t('settings.mcpServers.add')}
         open={modalOpen}
-        onOk={handleCreate}
-        onCancel={() => { setModalOpen(false); form.resetFields(); }}
+        onOk={modalTab === 'form' ? handleCreate : handleImportCreate}
+        onCancel={() => { setModalOpen(false); form.resetFields(); setImportJson(''); setImportError(null); }}
         mask={{ enabled: true, blur: true }}
       >
-        <Form form={form} layout="vertical" initialValues={{ transport: 'stdio' }}>
-          <Form.Item name="name" label={t('settings.mcpServers.name')} rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="transport" label={t('settings.mcpServers.transport')} rules={[{ required: true }]}>
-            <Select options={[
-              { value: 'sse', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Radio size={14} /> SSE</span> },
-              { value: 'http', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Globe size={14} /> StreamableHTTP</span> },
-              { value: 'stdio', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Terminal size={14} /> Stdio</span> },
-            ]} />
-          </Form.Item>
-          {transport === 'stdio' && (
-            <>
-              <Form.Item name="command" label={t('settings.mcpServers.command')}>
-                <Input placeholder="npx" />
-              </Form.Item>
-              <Form.Item name="args" label={t('settings.mcpServers.args')}>
-                <Input placeholder="-y @modelcontextprotocol/server-name" />
-              </Form.Item>
-            </>
-          )}
-          {(transport === 'http' || transport === 'sse') && (
-            <Form.Item name="endpoint" label={t('settings.mcpServers.endpoint')}>
-              <Input placeholder="http://localhost:3000" />
-            </Form.Item>
-          )}
-        </Form>
+        <Tabs
+          activeKey={modalTab}
+          onChange={(k) => { setModalTab(k as 'form' | 'import'); setImportError(null); }}
+          items={[
+            {
+              key: 'form',
+              label: t('settings.mcpServers.tabForm'),
+              children: (
+                <Form form={form} layout="vertical" initialValues={{ transport: 'stdio' }}>
+                  <Form.Item name="name" label={t('settings.mcpServers.name')} rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="transport" label={t('settings.mcpServers.transport')} rules={[{ required: true }]}>
+                    <Select options={[
+                      { value: 'sse', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Radio size={14} /> SSE</span> },
+                      { value: 'http', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Globe size={14} /> StreamableHTTP</span> },
+                      { value: 'stdio', label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Terminal size={14} /> Stdio</span> },
+                    ]} />
+                  </Form.Item>
+                  {transport === 'stdio' && (
+                    <>
+                      <Form.Item name="command" label={t('settings.mcpServers.command')}>
+                        <Input placeholder="npx" />
+                      </Form.Item>
+                      <Form.Item name="args" label={t('settings.mcpServers.args')}>
+                        <Input placeholder="-y @modelcontextprotocol/server-name" />
+                      </Form.Item>
+                    </>
+                  )}
+                  {(transport === 'http' || transport === 'sse') && (
+                    <Form.Item name="endpoint" label={t('settings.mcpServers.endpoint')}>
+                      <Input placeholder="http://localhost:3000" />
+                    </Form.Item>
+                  )}
+                </Form>
+              ),
+            },
+            {
+              key: 'import',
+              label: t('settings.mcpServers.tabImport'),
+              children: (
+                <div>
+                  <Input.TextArea
+                    rows={10}
+                    value={importJson}
+                    onChange={(e) => { setImportJson(e.target.value); setImportError(null); }}
+                    placeholder={t('settings.mcpServers.importPlaceholder')}
+                    status={importError ? 'error' : undefined}
+                    style={{ fontFamily: 'monospace' }}
+                  />
+                  {importError && (
+                    <div style={{ color: '#d32029', fontSize: 12, marginTop: 4 }}>{importError}</div>
+                  )}
+                </div>
+              ),
+            },
+          ]}
+        />
       </Modal>
     </div>
   );
