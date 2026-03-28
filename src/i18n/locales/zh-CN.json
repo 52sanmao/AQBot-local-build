@@ -348,6 +348,7 @@
     "globalShortcutRegisterFailedList": "注册失败快捷键：{{shortcuts}}",
     "globalShortcutDiagnosticsTitle": "全局快捷键诊断日志",
     "shortcutGlobalRegisterFailedTip": "该全局快捷键未注册成功：{{reason}}",
+    "shortcutExternalConflictTip": "该快捷键可能与 {{apps}} 的截图快捷键冲突，建议修改以避免意外触发",
     "shortcutTriggeredMessage": "触发快捷键：{{action}}",
     "shortcutAction": {
       "toggleCurrentWindow": "显示/隐藏当前窗口",

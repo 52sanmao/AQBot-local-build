@@ -9,6 +9,7 @@ import {
   SHORTCUT_DESCRIPTORS,
   SHORTCUT_SETTING_KEYS,
   detectShortcutConflicts,
+  findExternalConflict,
   formatShortcutForDisplay,
   getShortcutBindingByKey,
   normalizeShortcutFromKeyboardEvent,
@@ -214,6 +215,9 @@ export function ShortcutSettings() {
             const failedReason = settings.global_shortcuts_enabled && descriptor.supportsGlobal
               ? failedGlobalShortcutReasonMap.get(accelerator) ?? failedGlobalShortcutReasonMap.get('*')
               : undefined;
+            const externalConflict = descriptor.supportsGlobal
+              ? findExternalConflict(accelerator)
+              : undefined;
             const displayValue = recordingAction === action
               ? t('settings.pressShortcut')
               : formatShortcutForDisplay(binding);
@@ -234,7 +238,12 @@ export function ShortcutSettings() {
                     )}
                   </div>
                   <Space>
-                    {failedReason && (
+                    {failedReason && externalConflict && (
+                      <Tooltip title={t('settings.shortcutExternalConflictTip', { apps: externalConflict })}>
+                        <AlertTriangle size={16} color="#d89614" />
+                      </Tooltip>
+                    )}
+                    {failedReason && !externalConflict && (
                       <Tooltip title={t('settings.shortcutGlobalRegisterFailedTip', { reason: failedReason })}>
                         <AlertTriangle size={16} color="#d89614" />
                       </Tooltip>
@@ -274,6 +283,7 @@ export function ShortcutSettings() {
                     })}
                   </div>
                 ) : null}
+
               </div>
             );
           })}

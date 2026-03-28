@@ -348,6 +348,7 @@
     "globalShortcutRegisterFailedList": "Failed shortcuts: {{shortcuts}}",
     "globalShortcutDiagnosticsTitle": "Global Shortcut Diagnostics",
     "shortcutGlobalRegisterFailedTip": "Global shortcut is not registered: {{reason}}",
+    "shortcutExternalConflictTip": "This shortcut may conflict with {{apps}} screenshot shortcut. Consider changing it to avoid accidental triggers",
     "shortcutTriggeredMessage": "Shortcut triggered: {{action}}",
     "shortcutAction": {
       "toggleCurrentWindow": "Show/Hide Current Window",

@@ -250,3 +250,40 @@ export function detectShortcutConflicts(bindings: Partial<Record<ShortcutAction,
   }
   return conflicts;
 }
+
+/**
+ * Known external app shortcuts that commonly conflict with AQBot.
+ * Each entry maps a canonical accelerator (lowercase) to a list of
+ * app names that use the same shortcut.
+ */
+const KNOWN_EXTERNAL_CONFLICTS: Array<{
+  accelerators: string[];
+  apps: string;
+}> = [
+  {
+    accelerators: ['commandorcontrol+shift+a', 'control+shift+a', 'command+shift+a'],
+    apps: '飞书/微信/企业微信/钉钉',
+  },
+  {
+    accelerators: ['control+alt+a', 'command+alt+a'],
+    apps: 'QQ/微信',
+  },
+  {
+    accelerators: ['alt+a'],
+    apps: '微信 (Windows)',
+  },
+];
+
+/**
+ * Check whether a Tauri accelerator string matches a known external-app shortcut.
+ * Returns the conflicting app description or `undefined` if no conflict is found.
+ */
+export function findExternalConflict(accelerator: string): string | undefined {
+  const lower = accelerator.toLowerCase();
+  for (const entry of KNOWN_EXTERNAL_CONFLICTS) {
+    if (entry.accelerators.includes(lower)) {
+      return entry.apps;
+    }
+  }
+  return undefined;
+}
