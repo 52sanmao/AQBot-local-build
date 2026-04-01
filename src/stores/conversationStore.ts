@@ -1833,6 +1833,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
               ? { ...c, message_count: c.message_count + 1 }
               : c,
           ),
+          // Update completed message status immediately to prevent "主动停止" tag flash
+          messages: s.messages.map((m) =>
+            preserveMessageIds.includes(m.id) ? { ...m, status: 'complete' as const } : m,
+          ),
         }));
         if (get().activeConversationId === conversation_id) {
           // Active conversation — refresh messages then clear buffer
