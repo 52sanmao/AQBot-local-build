@@ -127,7 +127,15 @@ pub async fn validate_provider_key(
             .as_ref()
             .and_then(|s| serde_json::from_str(s).ok()),
     };
-    let valid = adapter.validate_key(&ctx).await.unwrap_or(false);
+    let valid = match adapter.validate_key(&ctx).await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!("Key validation failed for key {}: {}", key_id, e);
+            // Update as invalid, then return the error
+            let _ = aqbot_core::repo::provider::update_key_validation(&state.sea_db, &key_id, false).await;
+            return Err(e.to_string());
+        }
+    };
     // Update validation timestamp
     aqbot_core::repo::provider::update_key_validation(&state.sea_db, &key_id, valid)
         .await

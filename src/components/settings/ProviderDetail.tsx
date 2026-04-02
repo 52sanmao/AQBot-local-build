@@ -328,8 +328,8 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
         } else {
           message.error(t('settings.keyInvalidError'));
         }
-      } catch {
-        message.error(t('error.keyValidationFailed'));
+      } catch (e) {
+        message.error(t('error.keyValidationFailed') + ': ' + String(e));
       } finally {
         setValidatingKeys((s) => {
           const next = new Set(s);
@@ -361,7 +361,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       if (errMsg.includes('No active key') || errMsg.includes('key')) {
         message.error(t('settings.noActiveKeyError'));
       } else {
-        message.error(t('error.loadFailed'));
+        message.error(t('error.loadFailed') + ': ' + errMsg);
       }
     } finally {
       setRefreshing(false);

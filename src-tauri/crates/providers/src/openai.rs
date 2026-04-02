@@ -137,6 +137,12 @@ struct OpenAIModelsResponse {
     data: Vec<OpenAIModel>,
 }
 
+// Wrapped format used by API gateways (OneAPI/NewAPI etc.): {"code":0,"data":{"data":[...]}}
+#[derive(Deserialize)]
+struct WrappedModelsResponse {
+    data: OpenAIModelsResponse,
+}
+
 #[derive(Deserialize)]
 struct OpenAIModel {
     id: String,
@@ -642,48 +648,89 @@ impl ProviderAdapter for OpenAIAdapter {
             return Err(AQBotError::Provider(format!("OpenAI API error {s}: {t}")));
         }
 
-        let models: OpenAIModelsResponse = resp
-            .json()
+        let body = resp
+            .text()
             .await
-            .map_err(|e| AQBotError::Provider(format!("Parse error: {e}")))?;
+            .map_err(|e| AQBotError::Provider(format!("Read error: {e}")))?;
 
-        Ok(models
-            .data
-            .into_iter()
-            .map(|m| {
-                let model_type = ModelType::detect(&m.id);
-                let mut caps = match model_type {
-                    ModelType::Chat => vec![ModelCapability::TextChat],
-                    ModelType::Embedding => vec![],
-                    ModelType::Voice => vec![ModelCapability::RealtimeVoice],
-                };
-                let id_lower = m.id.to_lowercase();
-                if id_lower.contains("gpt-4o")
-                    || id_lower.contains("gpt-4-turbo")
-                    || id_lower.contains("claude")
-                    || id_lower.contains("vision")
-                {
-                    caps.push(ModelCapability::Vision);
-                }
-                if id_lower.starts_with("o1")
-                    || id_lower.starts_with("o3")
-                    || id_lower.starts_with("o4")
-                {
-                    caps.push(ModelCapability::Reasoning);
-                }
-                Model {
-                    provider_id: ctx.provider_id.clone(),
-                    model_id: m.id.clone(),
-                    name: m.id,
-                    group_name: None,
-                    model_type,
-                    capabilities: caps,
-                    max_tokens: None,
-                    enabled: true,
-                    param_overrides: None,
-                }
-            })
-            .collect())
+        let convert = |models: Vec<OpenAIModel>| -> Vec<Model> {
+            models
+                .into_iter()
+                .map(|m| {
+                    let model_type = ModelType::detect(&m.id);
+                    let mut caps = match model_type {
+                        ModelType::Chat => vec![ModelCapability::TextChat],
+                        ModelType::Embedding => vec![],
+                        ModelType::Voice => vec![ModelCapability::RealtimeVoice],
+                    };
+                    let id_lower = m.id.to_lowercase();
+                    if id_lower.contains("gpt-4o")
+                        || id_lower.contains("gpt-4-turbo")
+                        || id_lower.contains("claude")
+                        || id_lower.contains("vision")
+                    {
+                        caps.push(ModelCapability::Vision);
+                    }
+                    if id_lower.starts_with("o1")
+                        || id_lower.starts_with("o3")
+                        || id_lower.starts_with("o4")
+                    {
+                        caps.push(ModelCapability::Reasoning);
+                    }
+                    Model {
+                        provider_id: ctx.provider_id.clone(),
+                        model_id: m.id.clone(),
+                        name: m.id,
+                        group_name: None,
+                        model_type,
+                        capabilities: caps,
+                        max_tokens: None,
+                        enabled: true,
+                        param_overrides: None,
+                    }
+                })
+                .collect()
+        };
+
+        // Try standard OpenAI format: {"data": [...]}
+        if let Ok(r) = serde_json::from_str::<OpenAIModelsResponse>(&body) {
+            return Ok(convert(r.data));
+        }
+
+        // Try wrapped gateway format: {"code":0,"data":{"data":[...]}}
+        if let Ok(r) = serde_json::from_str::<WrappedModelsResponse>(&body) {
+            return Ok(convert(r.data.data));
+        }
+
+        // Try bare array: [{"id": "model-1"}, ...]
+        if let Ok(models) = serde_json::from_str::<Vec<OpenAIModel>>(&body) {
+            return Ok(convert(models));
+        }
+
+        Err(AQBotError::Provider(format!(
+            "Unsupported models response format (body: {})",
+            if body.len() > 200 { &body[..200] } else { &body }
+        )))
+    }
+
+    async fn validate_key(&self, ctx: &ProviderRequestContext) -> Result<bool> {
+        // Try list_models first
+        if self.list_models(ctx).await.is_ok() {
+            return Ok(true);
+        }
+        // Fallback: probe /models endpoint, valid key → 200/400, invalid → 401/403
+        let url = format!("{}/models", Self::base_url(ctx));
+        let resp = crate::apply_request_headers(
+            self.get_client(ctx)?
+                .get(&url)
+                .header("Authorization", format!("Bearer {}", ctx.api_key)),
+            ctx,
+        )
+        .send()
+        .await
+        .map_err(|e| AQBotError::Provider(format!("Request failed: {e}")))?;
+        let status = resp.status().as_u16();
+        Ok(status != 401 && status != 403)
     }
 
     async fn embed(
