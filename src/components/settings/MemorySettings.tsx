@@ -11,7 +11,6 @@ import {
   Empty,
   Divider,
   Dropdown,
-  Avatar,
   Popconfirm,
   theme,
   message,
@@ -19,15 +18,14 @@ import {
   Tooltip,
 } from 'antd';
 import type { MenuProps } from 'antd';
-import { Plus, Trash2, Brain, Trash, Pencil, Search, Zap, Settings, GripVertical, MoreHorizontal } from 'lucide-react';
+import { Plus, Trash2, Trash, Pencil, Search, Zap, Settings, GripVertical, MoreHorizontal } from 'lucide-react';
 import { invoke } from '@/lib/invoke';
 import { useTranslation } from 'react-i18next';
 import { useMemoryStore } from '@/stores';
 import { EmbeddingModelSelect } from '@/components/shared/EmbeddingModelSelect';
 import { IconEditor } from '@/components/shared/IconEditor';
+import { NamespaceIcon } from '@/components/shared/NamespaceIcon';
 import { listen } from '@tauri-apps/api/event';
-import { useResolvedAvatarSrc } from '@/hooks/useResolvedAvatarSrc';
-import type { AvatarType } from '@/stores/userProfileStore';
 import type { MemorySource, MemoryNamespace, MemoryItem } from '@/types';
 import {
   DndContext,
@@ -64,31 +62,6 @@ const INDEX_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   failed: { color: 'error', label: '索引失败' },
   skipped: { color: 'warning', label: '未配置' },
 };
-
-// ── Namespace Icon ────────────────────────────────────────
-
-function NamespaceIcon({ ns, size = 16 }: { ns: MemoryNamespace; size?: number }) {
-  const resolvedSrc = useResolvedAvatarSrc((ns.iconType as AvatarType) ?? 'icon', ns.iconValue ?? '');
-  const { token } = theme.useToken();
-
-  if (ns.iconType === 'emoji' && ns.iconValue) {
-    return (
-      <span style={{
-        width: size, height: size, borderRadius: '50%',
-        backgroundColor: token.colorFillSecondary,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: size * 0.7, lineHeight: 1, flexShrink: 0,
-      }}>
-        {ns.iconValue}
-      </span>
-    );
-  }
-  if ((ns.iconType === 'url' || ns.iconType === 'file') && ns.iconValue) {
-    const src = ns.iconType === 'file' ? resolvedSrc : ns.iconValue;
-    return <Avatar size={size} src={src} style={{ flexShrink: 0 }} />;
-  }
-  return <Brain size={size} style={{ flexShrink: 0, color: token.colorTextSecondary }} />;
-}
 
 // ── Sortable Namespace Item ──────────────────────────────
 

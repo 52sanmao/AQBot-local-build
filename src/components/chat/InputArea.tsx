@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { findModelByIds, supportsReasoning, modelHasCapability } from '@/lib/modelCapabilities';
 import { estimateMessageTokens, estimateTokens } from '@/lib/tokenEstimator';
 import { McpServerIcon } from '@/components/shared/McpServerIcon';
+import { NamespaceIcon } from '@/components/shared/NamespaceIcon';
 import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
 import type { ShortcutAction } from '@/lib/shortcuts';
 import { VoiceCall } from './VoiceCall';
@@ -360,7 +361,10 @@ export function InputArea() {
               checked={enabledMemoryNamespaceIds.includes(ns.id)}
               onChange={() => toggleMemoryNamespace(ns.id)}
             >
-              <span style={{ fontSize: 13 }}>{ns.name}</span>
+              <span style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <NamespaceIcon ns={ns} size={16} />
+                {ns.name}
+              </span>
             </Checkbox>
           </div>
         ))}
