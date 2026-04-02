@@ -62,10 +62,72 @@ async fn persist_attachments(
     Ok(persisted)
 }
 
+/// Strip display-only tags from assistant message content so they aren't sent to the AI.
+/// Strips: `<memory-retrieval data-aqbot="1">` tags and `:::mcp ... :::` fenced blocks.
+fn strip_display_tags(content: &str) -> String {
+    // Strip memory-retrieval tag with data-aqbot attribute
+    let content = {
+        const TAG_START: &str = "<memory-retrieval ";
+        if let Some(rest) = content.strip_prefix(TAG_START) {
+            if rest.contains("data-aqbot=") {
+                if let Some(end_pos) = content.find("</memory-retrieval>") {
+                    let after_tag = &content[end_pos + "</memory-retrieval>".len()..];
+                    after_tag.trim_start_matches('\n').to_string()
+                } else {
+                    content.to_string()
+                }
+            } else {
+                content.to_string()
+            }
+        } else {
+            content.to_string()
+        }
+    };
+
+    // Strip :::mcp blocks
+    let mut result = String::with_capacity(content.len());
+    let mut remaining = content.as_str();
+    while let Some(start) = remaining.find(":::mcp ") {
+        // Only match at start of line
+        let at_line_start = start == 0 || remaining.as_bytes().get(start - 1) == Some(&b'\n');
+        if !at_line_start {
+            result.push_str(&remaining[..start + 7]);
+            remaining = &remaining[start + 7..];
+            continue;
+        }
+        result.push_str(remaining[..start].trim_end_matches('\n'));
+        // Find the closing :::
+        if let Some(end_offset) = remaining[start..].find("\n:::\n") {
+            remaining = &remaining[start + end_offset + 4..]; // skip past \n:::\n
+        } else if remaining[start..].ends_with("\n:::") {
+            remaining = "";
+        } else {
+            // No closing fence found — keep the content
+            result.push_str(&remaining[start..]);
+            remaining = "";
+        }
+    }
+    result.push_str(remaining);
+    let trimmed = result.trim().to_string();
+    if trimmed.is_empty() && !content.trim().is_empty() {
+        // If stripping removed everything, return empty (content was all display tags)
+        String::new()
+    } else {
+        trimmed
+    }
+}
+
 fn build_message_content(
     file_store: &aqbot_core::file_store::FileStore,
     message: &Message,
 ) -> aqbot_core::error::Result<ChatContent> {
+    // Strip display-only tags from assistant messages
+    let content = if message.role == MessageRole::Assistant {
+        strip_display_tags(&message.content)
+    } else {
+        message.content.clone()
+    };
+
     let image_attachments = message
         .attachments
         .iter()
@@ -73,14 +135,14 @@ fn build_message_content(
         .collect::<Vec<_>>();
 
     if image_attachments.is_empty() {
-        return Ok(ChatContent::Text(message.content.clone()));
+        return Ok(ChatContent::Text(content));
     }
 
     let mut parts = Vec::new();
-    if !message.content.is_empty() {
+    if !content.is_empty() {
         parts.push(ContentPart {
             r#type: "text".to_string(),
-            text: Some(message.content.clone()),
+            text: Some(content.clone()),
             image_url: None,
         });
     }
@@ -113,7 +175,7 @@ fn build_message_content(
 
     // If only text part remains (all images were missing), simplify to Text
     if parts.len() <= 1 && parts.iter().all(|p| p.r#type == "text") {
-        return Ok(ChatContent::Text(message.content.clone()));
+        return Ok(ChatContent::Text(content));
     }
 
     Ok(ChatContent::Multipart(parts))
@@ -883,6 +945,16 @@ pub async fn cancel_stream(
     Ok(())
 }
 
+/// Build a `<memory-retrieval>` HTML tag from RAG source results for persistence.
+/// Prefixed with an HTML comment marker to distinguish from AI-generated content.
+fn build_memory_retrieval_tag(sources: &[RagSourceResult]) -> String {
+    if sources.is_empty() {
+        return String::new();
+    }
+    let json = serde_json::to_string(sources).unwrap_or_default();
+    format!("<memory-retrieval status=\"done\" data-aqbot=\"1\">\n{}\n</memory-retrieval>\n\n", json)
+}
+
 /// Spawn the streaming background task shared by send_message and regenerate_message.
 /// Returns the assistant message_id that will be populated as chunks arrive.
 fn spawn_stream_task(
@@ -908,6 +980,7 @@ fn spawn_stream_task(
     master_key: [u8; 32],
     cancel_flag: Arc<AtomicBool>,
     cancel_flags: Arc<tokio::sync::Mutex<std::collections::HashMap<String, Arc<AtomicBool>>>>,
+    content_prefix: String,
 ) {
     let model_id = conversation.model_id.clone();
 
@@ -1241,10 +1314,16 @@ fn spawn_stream_task(
         let token_count = total_usage.as_ref().map(|u| u.completion_tokens);
         let prompt_tokens = total_usage.as_ref().map(|u| u.prompt_tokens);
         let completion_tokens = total_usage.as_ref().map(|u| u.completion_tokens);
+        // Prepend memory retrieval tag (if any) so it persists in DB
+        let saved_content = if content_prefix.is_empty() {
+            total_content.clone()
+        } else {
+            format!("{}{}", content_prefix, total_content)
+        };
         if let Err(e) = aqbot_core::entity::messages::Entity::update(
             aqbot_core::entity::messages::ActiveModel {
                 id: Set(assistant_message_id.clone()),
-                content: Set(total_content.clone()),
+                content: Set(saved_content),
                 token_count: Set(token_count.map(|v| v as i64)),
                 prompt_tokens: Set(prompt_tokens.map(|v| v as i64)),
                 completion_tokens: Set(completion_tokens.map(|v| v as i64)),
@@ -1480,7 +1559,11 @@ pub async fn send_message(
     // RAG retrieval: search enabled knowledge bases and memory namespaces
     let kb_ids = enabled_knowledge_base_ids.unwrap_or_default();
     let mem_ids = enabled_memory_namespace_ids.unwrap_or_default();
-    let rag_context_parts = crate::indexing::collect_rag_context(
+    tracing::info!(
+        "RAG retrieval: kb_ids={:?}, mem_ids={:?}, query_len={}",
+        kb_ids, mem_ids, content.len()
+    );
+    let rag_result = crate::indexing::collect_rag_context(
         &state.sea_db,
         &state.master_key,
         &state.vector_store,
@@ -1491,12 +1574,28 @@ pub async fn send_message(
     )
     .await;
 
-    if !rag_context_parts.is_empty() {
+    tracing::info!("RAG context parts: {}", rag_result.context_parts.len());
+
+    // Build memory retrieval tag for persistence before moving source_results
+    let memory_tag = build_memory_retrieval_tag(&rag_result.source_results);
+
+    // Emit structured RAG results to frontend for real-time display during streaming
+    if !rag_result.source_results.is_empty() {
+        let _ = app.emit(
+            "rag-context-retrieved",
+            RagContextRetrievedEvent {
+                conversation_id: conversation_id.clone(),
+                sources: rag_result.source_results,
+            },
+        );
+    }
+
+    if !rag_result.context_parts.is_empty() {
         chat_messages.push(ChatMessage {
             role: "system".to_string(),
             content: ChatContent::Text(format!(
                 "The following reference materials may be relevant to the user's question. Use them if helpful:\n\n{}",
-                rag_context_parts.join("\n\n")
+                rag_result.context_parts.join("\n\n")
             )),
             tool_calls: None,
             tool_call_id: None,
@@ -1713,6 +1812,7 @@ pub async fn send_message(
         state.master_key,
         cancel_flag,
         state.stream_cancel_flags.clone(),
+        memory_tag,
     );
 
     // Return the user message immediately
@@ -1827,10 +1927,10 @@ pub async fn regenerate_message(
     }
 
     // RAG retrieval for regeneration
-    {
+    let memory_tag = {
         let kb_ids = enabled_knowledge_base_ids.unwrap_or_default();
         let mem_ids = enabled_memory_namespace_ids.unwrap_or_default();
-        let rag_parts = crate::indexing::collect_rag_context(
+        let rag_result = crate::indexing::collect_rag_context(
             &state.sea_db,
             &state.master_key,
             &state.vector_store,
@@ -1841,18 +1941,31 @@ pub async fn regenerate_message(
         )
         .await;
 
-        if !rag_parts.is_empty() {
+        let tag = build_memory_retrieval_tag(&rag_result.source_results);
+
+        if !rag_result.source_results.is_empty() {
+            let _ = app.emit(
+                "rag-context-retrieved",
+                RagContextRetrievedEvent {
+                    conversation_id: conversation_id.clone(),
+                    sources: rag_result.source_results,
+                },
+            );
+        }
+
+        if !rag_result.context_parts.is_empty() {
             chat_messages.push(ChatMessage {
                 role: "system".to_string(),
                 content: ChatContent::Text(format!(
                     "The following reference materials may be relevant to the user's question. Use them if helpful:\n\n{}",
-                    rag_parts.join("\n\n")
+                    rag_result.context_parts.join("\n\n")
                 )),
                 tool_calls: None,
                 tool_call_id: None,
             });
         }
-    }
+        tag
+    };
 
     // Find the target user message position, then search for context-clear/compressed BEFORE it
     let target_pos = remaining_messages
@@ -2002,6 +2115,7 @@ pub async fn regenerate_message(
         state.master_key,
         cancel_flag,
         state.stream_cancel_flags.clone(),
+        memory_tag,
     );
 
     Ok(())
@@ -2089,10 +2203,10 @@ pub async fn regenerate_with_model(
     }
 
     // RAG retrieval
-    {
+    let memory_tag = {
         let kb_ids = enabled_knowledge_base_ids.unwrap_or_default();
         let mem_ids = enabled_memory_namespace_ids.unwrap_or_default();
-        let rag_parts = crate::indexing::collect_rag_context(
+        let rag_result = crate::indexing::collect_rag_context(
             &state.sea_db,
             &state.master_key,
             &state.vector_store,
@@ -2103,18 +2217,31 @@ pub async fn regenerate_with_model(
         )
         .await;
 
-        if !rag_parts.is_empty() {
+        let tag = build_memory_retrieval_tag(&rag_result.source_results);
+
+        if !rag_result.source_results.is_empty() {
+            let _ = app.emit(
+                "rag-context-retrieved",
+                RagContextRetrievedEvent {
+                    conversation_id: conversation_id.clone(),
+                    sources: rag_result.source_results,
+                },
+            );
+        }
+
+        if !rag_result.context_parts.is_empty() {
             chat_messages.push(ChatMessage {
                 role: "system".to_string(),
                 content: ChatContent::Text(format!(
                     "The following reference materials may be relevant to the user's question. Use them if helpful:\n\n{}",
-                    rag_parts.join("\n\n")
+                    rag_result.context_parts.join("\n\n")
                 )),
                 tool_calls: None,
                 tool_call_id: None,
             });
         }
-    }
+        tag
+    };
 
     // Context building with context-clear/compressed handling
     let target_pos = remaining_messages.iter().position(|m| m.id == user_msg.id);
@@ -2253,6 +2380,7 @@ pub async fn regenerate_with_model(
         state.master_key,
         cancel_flag,
         state.stream_cancel_flags.clone(),
+        memory_tag,
     );
 
     Ok(())

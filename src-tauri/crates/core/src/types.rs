@@ -799,6 +799,41 @@ pub struct ConversationTitleGeneratingEvent {
     pub error: Option<String>,
 }
 
+// === RAG Context Events ===
+
+/// A single retrieved chunk from RAG search.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RagRetrievedItem {
+    pub content: String,
+    pub score: f32,
+    pub document_id: String,
+}
+
+/// Results from a single RAG source (knowledge base or memory namespace).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RagSourceResult {
+    /// "knowledge" or "memory"
+    pub source_type: String,
+    pub container_id: String,
+    pub items: Vec<RagRetrievedItem>,
+}
+
+/// Combined results of RAG context collection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RagContextResult {
+    /// Formatted context parts for injection into system prompt.
+    pub context_parts: Vec<String>,
+    /// Structured results for frontend display.
+    pub source_results: Vec<RagSourceResult>,
+}
+
+/// Tauri event emitted after RAG context retrieval completes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RagContextRetrievedEvent {
+    pub conversation_id: String,
+    pub sources: Vec<RagSourceResult>,
+}
+
 // === Embedding Types ===
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

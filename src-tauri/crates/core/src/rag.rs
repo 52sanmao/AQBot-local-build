@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 
 use crate::error::{AQBotError, Result};
+use crate::types::{RagContextResult, RagRetrievedItem, RagSourceResult};
 use crate::vector_store::{EmbeddingRecord, VectorSearchResult, VectorStore};
 use crate::{document_parser, text_chunker};
 
@@ -118,6 +119,10 @@ pub async fn search<S: RAGSource + ?Sized>(
 ) -> Result<Vec<VectorSearchResult>> {
     let embedding_provider = source.resolve_embedding_provider(db, container_id).await?;
     let cid = collection_id(source.collection_prefix(), container_id);
+    tracing::info!(
+        "RAG search: collection_id={}, embedding_provider={}, query_len={}",
+        cid, embedding_provider, query.len(),
+    );
 
     let embed_response = embed_fn
         .generate(db, master_key, &embedding_provider, vec![query.to_string()])
@@ -129,7 +134,11 @@ pub async fn search<S: RAGSource + ?Sized>(
         .next()
         .ok_or_else(|| AQBotError::Provider("No query embedding returned".into()))?;
 
-    vector_store.search(&cid, query_embedding, top_k).await
+    tracing::info!("RAG search: query embedding dims={}", query_embedding.len());
+
+    let results = vector_store.search(&cid, query_embedding, top_k).await?;
+    tracing::info!("RAG search: {} results from vector store", results.len());
+    Ok(results)
 }
 
 // ── Unified indexing ─────────────────────────────────────────────────────────
@@ -266,8 +275,9 @@ impl RAGSourceRef {
 
 /// Collect RAG context from all enabled sources for a conversation query.
 ///
-/// Returns formatted context parts ready to be joined and injected into the
-/// system prompt.  Errors for individual sources are logged and skipped.
+/// Returns a `RagContextResult` containing both formatted context parts
+/// (for injection into the system prompt) and structured results
+/// (for frontend display).  Errors for individual sources are logged and skipped.
 pub async fn collect_rag_context(
     db: &DatabaseConnection,
     master_key: &[u8; 32],
@@ -277,7 +287,7 @@ pub async fn collect_rag_context(
     query: &str,
     top_k: usize,
     embed_fn: impl AsyncEmbedFn + Clone,
-) -> Vec<String> {
+) -> RagContextResult {
     let mut sources: Vec<RAGSourceRef> = Vec::new();
 
     for id in kb_ids {
@@ -293,7 +303,8 @@ pub async fn collect_rag_context(
         });
     }
 
-    let mut parts = Vec::new();
+    let mut context_parts = Vec::new();
+    let mut source_results = Vec::new();
 
     for src_ref in &sources {
         let source = src_ref.source();
@@ -311,26 +322,61 @@ pub async fn collect_rag_context(
 
         match result {
             Ok(results) if !results.is_empty() => {
+                tracing::info!(
+                    "RAG search returned {} results for {} {}",
+                    results.len(),
+                    source.collection_prefix(),
+                    src_ref.container_id,
+                );
+
+                let items: Vec<RagRetrievedItem> = results
+                    .iter()
+                    .map(|r| RagRetrievedItem {
+                        content: r.content.clone(),
+                        score: r.score,
+                        document_id: r.document_id.clone(),
+                    })
+                    .collect();
+
                 let snippets: Vec<String> = results.iter().map(|r| r.content.clone()).collect();
-                parts.push(format!(
+                context_parts.push(format!(
                     "[{}]\n{}",
                     source.context_label(),
                     snippets.join("\n---\n")
                 ));
+
+                let source_type_str = match src_ref.source_type {
+                    RAGSourceType::Knowledge => "knowledge",
+                    RAGSourceType::Memory => "memory",
+                };
+                source_results.push(RagSourceResult {
+                    source_type: source_type_str.to_string(),
+                    container_id: src_ref.container_id.clone(),
+                    items,
+                });
+            }
+            Ok(_) => {
+                tracing::warn!(
+                    "RAG search returned no results for {} {}",
+                    source.collection_prefix(),
+                    src_ref.container_id,
+                );
             }
             Err(e) => {
-                tracing::debug!(
+                tracing::warn!(
                     "RAG search failed for {} {}: {}",
                     source.collection_prefix(),
                     src_ref.container_id,
                     e
                 );
             }
-            _ => {}
         }
     }
 
-    parts
+    RagContextResult {
+        context_parts,
+        source_results,
+    }
 }
 
 // ── Embed function trait ─────────────────────────────────────────────────────

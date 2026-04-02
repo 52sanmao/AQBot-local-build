@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { invoke, listen, type UnlistenFn, isTauri } from '@/lib/invoke';
 import { supportsReasoning, findModelByIds } from '@/lib/modelCapabilities';
 import { formatSearchContent, buildSearchTag } from '@/lib/searchUtils';
+import { buildMemoryTag, type RagContextRetrievedEvent } from '@/lib/memoryUtils';
 import { useProviderStore } from '@/stores/providerStore';
 import { useSearchStore } from '@/stores/searchStore';
 import type {
@@ -1116,6 +1117,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       const thinkingBudget = getEffectiveThinkingBudget(get, conversationId);
       const kbIds = get().enabledKnowledgeBaseIds;
       const memIds = get().enabledMemoryNamespaceIds;
+      console.warn('[sendMessage] RAG IDs:', { kbIds, memIds, kbSent: kbIds.length > 0, memSent: memIds.length > 0 });
       const userMessage = await invoke<Message>('send_message', {
         conversationId,
         content: finalContent,
@@ -1955,12 +1957,43 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       }
     });
 
+    const ragUnsub = await listen<RagContextRetrievedEvent>('rag-context-retrieved', (event) => {
+      if (_listenerGen !== gen) return;
+      if (!get().streaming) return;
+      const { conversation_id, sources } = event.payload;
+      console.warn('[rag-context-retrieved] event received:', { conversation_id, sourcesCount: sources.length, sources });
+      if (sources.length === 0) return;
+
+      const memTag = buildMemoryTag('done', sources);
+
+      if (_streamBuffer && _streamBuffer.conversationId === conversation_id) {
+        // Buffer already started — prepend tag to existing content
+        _streamBuffer.content = memTag + _streamBuffer.content;
+      } else {
+        // Buffer not yet created — append to prefix
+        _streamPrefix = memTag + _streamPrefix;
+      }
+
+      // Update UI immediately to show the memory retrieval card
+      if (get().activeConversationId === conversation_id) {
+        const msgId = get().streamingMessageId;
+        if (msgId) {
+          set((s) => ({
+            messages: s.messages.map(m =>
+              m.id === msgId ? { ...m, content: memTag + (m.content || '') } : m
+            ),
+          }));
+        }
+      }
+    });
+
     // If generation changed while awaiting, this listener set is stale
     if (_listenerGen !== gen) {
       chunkUnsub();
       errorUnsub();
       titleUnsub();
       titleGenUnsub();
+      ragUnsub();
       return;
     }
 
@@ -1969,6 +2002,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       errorUnsub();
       titleUnsub();
       titleGenUnsub();
+      ragUnsub();
     };
   },
 

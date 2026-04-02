@@ -19,8 +19,9 @@ import { useResolvedDarkMode } from '@/hooks/useResolvedDarkMode';
 import { InputArea } from './InputArea';
 import { ModelSelector } from './ModelSelector';
 import { parseSearchContent } from '@/lib/searchUtils';
-import { CHAT_CUSTOM_HTML_TAGS, parseChatMarkdown, type ChatMarkdownNode } from '@/lib/chatMarkdown';
+import { CHAT_CUSTOM_HTML_TAGS, parseChatMarkdown, stripAqbotTags, type ChatMarkdownNode } from '@/lib/chatMarkdown';
 import { WebSearchNode } from './WebSearchNode';
+import { MemoryRetrievalNode } from './MemoryRetrievalNode';
 import { McpContainerNode } from './McpContainerNode';
 import { getDistanceToHistoryTop, shouldShowScrollToBottom } from './chatScroll';
 import { formatTokenCount } from '../gateway/tokenFormat';
@@ -740,7 +741,7 @@ function ChatD2Node(props: NodeComponentProps<ChatD2CodeBlockNode>) {
   return <ChatD2BlockNode node={node} isDark={ctx?.isDark} />;
 }
 
-setCustomComponents('chat', { thinking: ThinkingNode, 'web-search': WebSearchNode, d2: ChatD2Node, vmr_container: McpContainerNode });
+setCustomComponents('chat', { thinking: ThinkingNode, 'web-search': WebSearchNode, 'memory-retrieval': MemoryRetrievalNode, d2: ChatD2Node, vmr_container: McpContainerNode });
 
 const AssistantMarkdown = React.memo(function AssistantMarkdown({
   content,
@@ -1722,14 +1723,14 @@ export function ChatView() {
           : '';
         aiContent = `<thinking data-message-id="${msg.id}">${thinkingMarker}${msg.thinking}</thinking>\n\n${aiContent}`;
       }
-      if (msg.role === 'assistant' && !aiContent.startsWith('<web-search')) {
+      if (msg.role === 'assistant' && !aiContent.includes('data-aqbot="1"')) {
         const parentSearch = msg.parent_message_id
           ? userSearchContentById.get(msg.parent_message_id)
           : undefined;
         if (parentSearch?.hasSearch && parentSearch.sources.length > 0) {
           const { sources } = parentSearch;
           const resultsJson = JSON.stringify(sources.map((s) => ({ title: s.title, url: s.url })));
-          aiContent = `<web-search status="done">\n${resultsJson}\n</web-search>\n\n${aiContent}`;
+          aiContent = `<web-search status="done" data-aqbot="1">\n${resultsJson}\n</web-search>\n\n${aiContent}`;
         }
       }
 
@@ -1887,7 +1888,7 @@ export function ChatView() {
               label: t('chat.copy'),
               onItemClick: () => {
                 navigator.clipboard
-                  .writeText(String(bubbleData.content ?? ''))
+                  .writeText(stripAqbotTags(String(bubbleData.content ?? '')))
                   .then(() => messageApi.success(t('chat.copied')));
               },
             },
@@ -1938,7 +1939,7 @@ export function ChatView() {
     // bubbleData.key is parent_message_id for stable rendering
     const msg = assistantByParentId.get(String(bubbleData.key)) ?? messageById.get(String(bubbleData.key));
     const isStreaming = streaming && msg?.id === streamingMessageId;
-    const assistantCopyText = msg?.content ?? (typeof bubbleData.content === 'string' ? bubbleData.content : '');
+    const assistantCopyText = stripAqbotTags(msg?.content ?? (typeof bubbleData.content === 'string' ? bubbleData.content : ''));
     const parsedNodes = aiContentNodesById.get(String(bubbleData.key));
     const { bubbleLoading, footerLoading } = getStreamingLoadingState(isStreaming, bubbleData.content);
     return {

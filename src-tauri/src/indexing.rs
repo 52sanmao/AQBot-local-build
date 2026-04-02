@@ -251,7 +251,7 @@ pub async fn search_memory(
 
 /// Collect RAG context from all enabled sources for a conversation query.
 ///
-/// Returns formatted context parts ready to be joined into a system message.
+/// Returns a `RagContextResult` with formatted context parts and structured results.
 pub async fn collect_rag_context(
     db: &DatabaseConnection,
     master_key: &[u8; 32],
@@ -260,7 +260,7 @@ pub async fn collect_rag_context(
     mem_ids: &[String],
     query: &str,
     top_k: usize,
-) -> Vec<String> {
+) -> RagContextResult {
     rag::collect_rag_context(
         db,
         master_key,

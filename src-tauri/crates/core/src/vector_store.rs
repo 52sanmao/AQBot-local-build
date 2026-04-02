@@ -122,26 +122,22 @@ impl VectorStore {
         self.delete_rows_by_document(&name, doc_id).await?;
 
         // Insert new records.
+        // IMPORTANT: Insert into vec0 FIRST (it auto-assigns its own rowid
+        // and ignores explicit rowid values), then use that rowid for meta.
         for record in &records {
             let vec_json = Self::embedding_to_json(&record.embedding);
 
+            // Step 1: Insert embedding into vec0 (without explicit rowid)
             self.db
                 .execute(Statement::from_sql_and_values(
                     DbBackend::Sqlite,
-                    &format!(
-                        "INSERT INTO {name}_meta (id, document_id, chunk_index, content) \
-                         VALUES ($1, $2, $3, $4)"
-                    ),
-                    vec![
-                        record.id.clone().into(),
-                        record.document_id.clone().into(),
-                        record.chunk_index.into(),
-                        record.content.clone().into(),
-                    ],
+                    &format!("INSERT INTO {name} (embedding) VALUES ($1)"),
+                    vec![vec_json.into()],
                 ))
                 .await
                 .map_err(Self::wrap)?;
 
+            // Step 2: Get the rowid that vec0 auto-assigned
             let last = self
                 .db
                 .query_one(Statement::from_string(
@@ -154,11 +150,21 @@ impl VectorStore {
 
             let rowid: i64 = last.try_get("", "rid").map_err(Self::wrap)?;
 
+            // Step 3: Insert meta with the same rowid from vec0
             self.db
                 .execute(Statement::from_sql_and_values(
                     DbBackend::Sqlite,
-                    &format!("INSERT INTO {name} (rowid, embedding) VALUES ($1, $2)"),
-                    vec![rowid.into(), vec_json.into()],
+                    &format!(
+                        "INSERT INTO {name}_meta (rowid, id, document_id, chunk_index, content) \
+                         VALUES ($1, $2, $3, $4, $5)"
+                    ),
+                    vec![
+                        rowid.into(),
+                        record.id.clone().into(),
+                        record.document_id.clone().into(),
+                        record.chunk_index.into(),
+                        record.content.clone().into(),
+                    ],
                 ))
                 .await
                 .map_err(Self::wrap)?;
@@ -180,9 +186,67 @@ impl VectorStore {
         let name = Self::collection_name(knowledge_base_id);
 
         if !self.table_exists(&format!("{name}_meta")).await? {
+            tracing::warn!("Vector store: table {name}_meta does not exist, returning empty");
             return Ok(vec![]);
         }
 
+        // Diagnostic: check row count in meta table
+        let count_sql = format!("SELECT COUNT(*) as cnt FROM {name}_meta");
+        if let Ok(count_rows) = self
+            .db
+            .query_all(Statement::from_string(DbBackend::Sqlite, count_sql))
+            .await
+        {
+            if let Some(row) = count_rows.first() {
+                let cnt: i64 = row.try_get("", "cnt").unwrap_or(-1);
+                tracing::info!("Vector store: {name}_meta has {cnt} rows");
+            }
+        }
+
+        // Diagnostic: check vec0 table row count
+        let vec_count_sql = format!("SELECT COUNT(*) as cnt FROM {name}");
+        if let Ok(count_rows) = self
+            .db
+            .query_all(Statement::from_string(DbBackend::Sqlite, vec_count_sql))
+            .await
+        {
+            if let Some(row) = count_rows.first() {
+                let cnt: i64 = row.try_get("", "cnt").unwrap_or(-1);
+                tracing::info!("Vector store: {name} (vec0) has {cnt} rows");
+            }
+        }
+
+        // Diagnostic: check vec0 table schema to verify stored dimensions
+        let schema_sql = format!(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='{name}'"
+        );
+        if let Ok(schema_rows) = self
+            .db
+            .query_all(Statement::from_string(DbBackend::Sqlite, schema_sql))
+            .await
+        {
+            if let Some(row) = schema_rows.first() {
+                let sql_text: String = row.try_get("", "sql").unwrap_or_default();
+                tracing::info!("Vector store: {name} schema: {sql_text}");
+            } else {
+                tracing::warn!("Vector store: {name} not found in sqlite_master (virtual table?)");
+            }
+        }
+
+        // Diagnostic: check rowid alignment between meta and vec0
+        let meta_rowids_sql = format!("SELECT rowid FROM {name}_meta ORDER BY rowid");
+        if let Ok(rows) = self.db.query_all(Statement::from_string(DbBackend::Sqlite, meta_rowids_sql)).await {
+            let rids: Vec<String> = rows.iter().filter_map(|r| r.try_get::<i64>("", "rowid").ok().map(|v| v.to_string())).collect();
+            tracing::info!("Vector store: {name}_meta rowids: [{}]", rids.join(", "));
+        }
+        let vec_rowids_sql = format!("SELECT rowid FROM {name} ORDER BY rowid");
+        if let Ok(rows) = self.db.query_all(Statement::from_string(DbBackend::Sqlite, vec_rowids_sql)).await {
+            let rids: Vec<String> = rows.iter().filter_map(|r| r.try_get::<i64>("", "rowid").ok().map(|v| v.to_string())).collect();
+            tracing::info!("Vector store: {name} (vec0) rowids: [{}]", rids.join(", "));
+        }
+
+        let query_dims = query_embedding.len();
+        tracing::info!("Vector store: querying {name} with {query_dims} dims, top_k={top_k}");
         let vec_json = Self::embedding_to_json(&query_embedding);
 
         let sql = format!(
@@ -193,7 +257,7 @@ impl VectorStore {
              ORDER BY v.distance"
         );
 
-        let rows = self
+        let rows = match self
             .db
             .query_all(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
@@ -201,7 +265,13 @@ impl VectorStore {
                 vec![vec_json.into(), (top_k as i64).into()],
             ))
             .await
-            .map_err(Self::wrap)?;
+        {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("Vector store: search query failed for {name} (query_dims={query_dims}): {e}");
+                return Ok(vec![]);
+            }
+        };
 
         let mut results = Vec::with_capacity(rows.len());
         for row in &rows {
