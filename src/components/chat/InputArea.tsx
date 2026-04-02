@@ -521,6 +521,12 @@ export function InputArea() {
 
       setValue('');
       setAttachedFiles([]);
+      // Reset textarea height after clearing content
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
+      });
       if (companionModels.length > 0) {
         await sendMultiModelMessage(trimmed, companionModels, attachments, searchEnabled ? searchProviderId : null);
       } else {
@@ -531,6 +537,14 @@ export function InputArea() {
       setAttachedFiles((current) => (current.length > 0 ? current : submittedFiles));
       console.error('[handleSend] error:', e);
       messageApi.error(String(e));
+      // Re-expand textarea after restoring content
+      requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          textarea.style.height = 'auto';
+          textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+        }
+      });
     }
   }, [value, attachedFiles, sendMessage, sendMultiModelMessage, companionModels, activeConversationId, providers, settings, createConversation, messageApi, t, searchEnabled, searchProviderId]);
 

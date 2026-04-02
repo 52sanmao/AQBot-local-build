@@ -47,33 +47,36 @@ function ParamRow({
             </Tooltip>
           )}
         </span>
-        {showSwitch && (
-          <Switch
-            size="small"
-            checked={isOn}
-            onChange={(checked) => onChange(checked ? defaultValue : null)}
-          />
-        )}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isOn && (
+            <InputNumber
+              style={{ width: inputWidth }}
+              min={min}
+              max={max}
+              step={step}
+              value={value!}
+              onChange={(v) => v !== null && onChange(v)}
+              size="small"
+            />
+          )}
+          {showSwitch && (
+            <Switch
+              size="small"
+              checked={isOn}
+              onChange={(checked) => onChange(checked ? defaultValue : null)}
+            />
+          )}
+        </span>
       </div>
       {isOn && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 8 }}>
+        <div style={{ paddingBottom: 8 }}>
           <Slider
-            style={{ flex: 1 }}
             min={min}
             max={max}
             step={step}
             marks={marks}
             value={value!}
             onChange={(v) => onChange(v)}
-          />
-          <InputNumber
-            style={{ width: inputWidth }}
-            min={min}
-            max={max}
-            step={step}
-            value={value!}
-            onChange={(v) => v !== null && onChange(v)}
-            size="small"
           />
         </div>
       )}

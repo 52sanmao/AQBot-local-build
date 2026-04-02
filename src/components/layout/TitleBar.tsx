@@ -533,7 +533,11 @@ export function TitleBar() {
         {/* Settings Toggle */}
         <Tooltip title={`${isInSettings ? t('settings.closeSettings', '关闭设置') : t('settings.openSettings', '设置')} (${formatShortcutForDisplay(getShortcutBinding(settings, 'openSettings'))})`}>
         <button
-          onClick={handleSettingsToggle}
+          onClick={(e) => {
+            handleSettingsToggle();
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.blur();
+          }}
           style={{
             ...buttonBase,
             color: isInSettings ? token.colorError : token.colorTextSecondary,

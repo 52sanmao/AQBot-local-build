@@ -13,6 +13,7 @@ import {
   Popconfirm,
   Popover,
   Select,
+  Slider,
   Space,
   Spin,
   Switch,
@@ -1345,19 +1346,29 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
               <div className="font-medium mb-2" style={{ fontSize: 13 }}>{t('settings.modelParams')}</div>
               <div className="space-y-3">
                 {/* Context Window */}
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm shrink-0" style={{ color: token.colorText }}>{t('settings.contextWindow')}</span>
-                  <InputNumber
-                    value={editMaxTokens}
-                    onChange={(v) => setEditMaxTokens(v)}
-                    min={1024}
-                    max={100000000}
-                    step={1024}
-                    style={{ width: 180 }}
-                    size="small"
-                    addonAfter="tokens"
-                    formatter={(v) => v ? `${Number(v).toLocaleString()}` : ''}
-                  />
+                <div>
+                  <div className="flex items-center justify-between" style={{ padding: '8px 0' }}>
+                    <span className="text-sm shrink-0" style={{ color: token.colorText }}>{t('settings.contextWindow')}</span>
+                    <InputNumber
+                      value={editMaxTokens}
+                      onChange={(v) => v != null && setEditMaxTokens(v)}
+                      min={1024}
+                      step={1024}
+                      style={{ width: 110 }}
+                      size="small"
+                      formatter={(v) => v ? `${Number(v).toLocaleString()}` : ''}
+                    />
+                  </div>
+                  <div style={{ paddingBottom: 8 }}>
+                    <Slider
+                      min={1024}
+                      max={1048576}
+                      step={1024}
+                      marks={{ 1024: '', 32768: '32K', 131072: '128K', 524288: '512K', 1048576: '1M' }}
+                      value={Math.min(editMaxTokens ?? 128000, 1048576)}
+                      onChange={(v) => setEditMaxTokens(v)}
+                    />
+                  </div>
                 </div>
 
                 <ModelParamSliders
