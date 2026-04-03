@@ -389,6 +389,8 @@ export interface AppSettings {
   last_selected_conversation_id?: string | null;
   /** Auto update check interval in minutes (default 60, min 1) */
   update_check_interval?: number;
+  /** Global system prompt fallback — used when a conversation has no custom system prompt */
+  default_system_prompt?: string | null;
 }
 
 // === Streaming ===
@@ -438,7 +440,7 @@ export interface RealtimeConfig {
 
 // === UI State ===
 export type PageKey = 'chat' | 'knowledge' | 'memory' | 'gateway' | 'files' | 'settings';
-export type SettingsSection = 'providers' | 'defaultModel' | 'general' | 'display' | 'proxy' | 'shortcuts' | 'data' | 'storage' | 'about' | 'searchProviders' | 'mcpServers' | 'backup';
+export type SettingsSection = 'providers' | 'defaultModel' | 'conversationSettings' | 'general' | 'display' | 'proxy' | 'shortcuts' | 'data' | 'storage' | 'about' | 'searchProviders' | 'mcpServers' | 'backup';
 
 // === Files Module ===
 export type FileCategory = 'images' | 'files';

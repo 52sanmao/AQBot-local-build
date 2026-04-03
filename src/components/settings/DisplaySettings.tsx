@@ -134,22 +134,6 @@ export function DisplaySettings() {
           />
         </div>
       </Card>
-      <Card size="small" title={t('settings.groupMessageStyle')}>
-        <div style={rowStyle} className="flex items-center justify-between">
-          <span>{t('settings.bubbleStyle')}</span>
-          <Select
-            value={settings.bubble_style}
-            onChange={(val) => saveSettings({ bubble_style: val })}
-            style={{ width: 200 }}
-            options={[
-              { label: t('settings.bubbleModern'), value: 'modern' },
-              { label: t('settings.bubbleCompact'), value: 'compact' },
-              { label: t('settings.bubbleMinimal'), value: 'minimal' },
-            ]}
-          />
-        </div>
-
-      </Card>
     </div>
   );
 }

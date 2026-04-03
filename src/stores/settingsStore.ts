@@ -76,6 +76,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   notify_errors: true,
   last_selected_conversation_id: null,
   update_check_interval: 60,
+  default_system_prompt: null,
 };
 
 export interface GlobalShortcutDiagnostic {

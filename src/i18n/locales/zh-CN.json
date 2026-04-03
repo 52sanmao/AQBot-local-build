@@ -318,6 +318,7 @@
   "settings": {
     "title": "设置",
     "providers": "服务商管理",
+    "conversationSettings": "对话设置",
     "defaultModel": "默认模型",
     "general": "通用设置",
     "display": "显示设置",
@@ -492,6 +493,9 @@
     "useActiveModel": "使用当前活跃对话的模型",
     "defaultConversationModel": "默认对话模型",
     "defaultConversationModelDesc": "新建对话时默认选择的模型，未设置时将沿用上个活跃对话的模型",
+    "defaultSystemPrompt": "全局系统预设",
+    "defaultSystemPromptDesc": "所有对话的默认系统预设，对话中单独设置的系统预设会覆盖此全局设置",
+    "defaultSystemPromptPlaceholder": "输入全局系统预设...",
     "titleSummaryModel": "标题总结模型",
     "titleSummaryModelDesc": "自动生成对话标题时所使用的模型，若未设置则使用对话采用的模型生成",
     "titleSummaryPrompt": "总结预设提示词",

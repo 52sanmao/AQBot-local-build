@@ -15,10 +15,12 @@ import {
   StorageSpaceManager,
 } from '@/components/settings';
 import { DefaultModelSettings } from '@/components/settings/DefaultModelSettings';
+import { ConversationSettings } from '@/components/settings/ConversationSettings';
 import type { SettingsSection } from '@/types';
 
 const SECTION_COMPONENTS: Record<SettingsSection, React.ComponentType> = {
   providers: ProviderSettings,
+  conversationSettings: ConversationSettings,
   defaultModel: DefaultModelSettings,
   general: GeneralSettings,
   display: DisplaySettings,

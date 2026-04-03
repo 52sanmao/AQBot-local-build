@@ -1592,20 +1592,29 @@ pub async fn send_message(
 
     let mut chat_messages: Vec<ChatMessage> = Vec::new();
 
-    // Prepend system prompt if present
-    if let Some(ref sys) = conversation.system_prompt {
-        if !sys.is_empty() {
-            chat_messages.push(ChatMessage {
-                role: if no_system_role {
-                    "user".to_string()
-                } else {
-                    "system".to_string()
-                },
-                content: ChatContent::Text(sys.clone()),
-                tool_calls: None,
-                tool_call_id: None,
-            });
+    // Resolve effective system prompt: conversation-level overrides global default
+    let effective_system_prompt = match &conversation.system_prompt {
+        Some(s) if !s.is_empty() => Some(s.clone()),
+        _ => {
+            let settings = aqbot_core::repo::settings::get_settings(&state.sea_db)
+                .await
+                .unwrap_or_default();
+            settings.default_system_prompt.filter(|s| !s.is_empty())
         }
+    };
+
+    // Prepend system prompt if present
+    if let Some(ref sys) = effective_system_prompt {
+        chat_messages.push(ChatMessage {
+            role: if no_system_role {
+                "user".to_string()
+            } else {
+                "system".to_string()
+            },
+            content: ChatContent::Text(sys.clone()),
+            tool_calls: None,
+            tool_call_id: None,
+        });
     }
 
     // RAG retrieval: search enabled knowledge bases and memory namespaces
@@ -1959,15 +1968,24 @@ pub async fn regenerate_message(
 
     let mut chat_messages: Vec<ChatMessage> = Vec::new();
 
-    if let Some(ref sys) = conversation.system_prompt {
-        if !sys.is_empty() {
-            chat_messages.push(ChatMessage {
-                role: "system".to_string(),
-                content: ChatContent::Text(sys.clone()),
-                tool_calls: None,
-                tool_call_id: None,
-            });
+    // Resolve effective system prompt: conversation-level overrides global default
+    let effective_system_prompt = match &conversation.system_prompt {
+        Some(s) if !s.is_empty() => Some(s.clone()),
+        _ => {
+            let settings = aqbot_core::repo::settings::get_settings(&state.sea_db)
+                .await
+                .unwrap_or_default();
+            settings.default_system_prompt.filter(|s| !s.is_empty())
         }
+    };
+
+    if let Some(ref sys) = effective_system_prompt {
+        chat_messages.push(ChatMessage {
+            role: "system".to_string(),
+            content: ChatContent::Text(sys.clone()),
+            tool_calls: None,
+            tool_call_id: None,
+        });
     }
 
     // RAG retrieval for regeneration
@@ -2234,15 +2252,24 @@ pub async fn regenerate_with_model(
     let file_store = aqbot_core::file_store::FileStore::new();
     let mut chat_messages: Vec<ChatMessage> = Vec::new();
 
-    if let Some(ref sys) = conversation.system_prompt {
-        if !sys.is_empty() {
-            chat_messages.push(ChatMessage {
-                role: "system".to_string(),
-                content: ChatContent::Text(sys.clone()),
-                tool_calls: None,
-                tool_call_id: None,
-            });
+    // Resolve effective system prompt: conversation-level overrides global default
+    let effective_system_prompt = match &conversation.system_prompt {
+        Some(s) if !s.is_empty() => Some(s.clone()),
+        _ => {
+            let settings = aqbot_core::repo::settings::get_settings(&state.sea_db)
+                .await
+                .unwrap_or_default();
+            settings.default_system_prompt.filter(|s| !s.is_empty())
         }
+    };
+
+    if let Some(ref sys) = effective_system_prompt {
+        chat_messages.push(ChatMessage {
+            role: "system".to_string(),
+            content: ChatContent::Text(sys.clone()),
+            tool_calls: None,
+            tool_call_id: None,
+        });
     }
 
     // RAG retrieval

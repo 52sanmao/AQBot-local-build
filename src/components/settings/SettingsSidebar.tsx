@@ -1,11 +1,12 @@
 import { Menu, theme } from 'antd';
-import { Cloud, Settings, Palette, Globe, Zap, Database, Info, Search, Plug, CloudUpload, Bot, HardDrive } from 'lucide-react';
+import { Cloud, Settings, Palette, Globe, Zap, Database, Info, Search, Plug, CloudUpload, Bot, HardDrive, MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores';
 import type { SettingsSection } from '@/types';
 
 const MENU_ICONS: Record<SettingsSection, React.ReactNode> = {
   providers: <Cloud size={16} />,
+  conversationSettings: <MessageSquare size={16} />,
   defaultModel: <Bot size={16} />,
   general: <Settings size={16} />,
   display: <Palette size={16} />,
@@ -23,6 +24,7 @@ const SECTION_KEYS: SettingsSection[] = [
   'general',
   'display',
   'providers',
+  'conversationSettings',
   'defaultModel',
   'searchProviders',
   'mcpServers',

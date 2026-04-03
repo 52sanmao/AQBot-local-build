@@ -318,6 +318,7 @@
   "settings": {
     "title": "Settings",
     "providers": "Provider Management",
+    "conversationSettings": "Conversation",
     "defaultModel": "Default Model",
     "general": "General",
     "display": "Display",
@@ -492,6 +493,9 @@
     "useActiveModel": "Use active conversation model",
     "defaultConversationModel": "Default Conversation Model",
     "defaultConversationModelDesc": "Default model for new conversations. Falls back to the last active conversation model if not set",
+    "defaultSystemPrompt": "Global System Prompt",
+    "defaultSystemPromptDesc": "Default system prompt for all conversations. A conversation-specific prompt will override this setting",
+    "defaultSystemPromptPlaceholder": "Enter global system prompt...",
     "titleSummaryModel": "Title Summary Model",
     "titleSummaryModelDesc": "Model used for automatic title generation. Falls back to the conversation model if not set",
     "titleSummaryPrompt": "Summary Preset Prompt",
