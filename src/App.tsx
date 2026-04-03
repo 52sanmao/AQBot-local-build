@@ -115,6 +115,7 @@ function AppRoot() {
   const fontFamily = useSettingsStore((s) => s.settings.font_family);
   const codeFontFamily = useSettingsStore((s) => s.settings.code_font_family);
   const borderRadius = useSettingsStore((s) => s.settings.border_radius);
+  const language = useSettingsStore((s) => s.settings.language);
   const isDark = useResolvedDarkMode(themeMode);
 
   useEffect(() => {
@@ -173,11 +174,10 @@ function AppRoot() {
 
   // Sync i18n language with settings store
   useEffect(() => {
-    const lang = useSettingsStore.getState().settings.language;
-    if (i18n.language !== lang) {
-      i18n.changeLanguage(lang);
+    if (i18n.language !== language) {
+      i18n.changeLanguage(language);
     }
-  }, [i18n]);
+  }, [i18n, language]);
 
   useEffect(() => {
     const t = i18n.getFixedT(i18n.language);

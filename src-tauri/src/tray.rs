@@ -8,9 +8,27 @@ use tauri::{
 const TRAY_ID: &str = "aqbot-tray";
 
 fn tray_labels(language: &str) -> (&'static str, &'static str) {
-    let language = language.to_ascii_lowercase();
-    if language == "en" || language.starts_with("en-") {
+    let lang = language.to_ascii_lowercase();
+    if lang == "en" || lang.starts_with("en-") {
         ("Show", "Quit")
+    } else if lang == "zh-tw" {
+        ("顯示主視窗", "退出 AQBot")
+    } else if lang == "ja" {
+        ("メインウィンドウを表示", "AQBot を終了")
+    } else if lang == "ko" {
+        ("메인 창 표시", "AQBot 종료")
+    } else if lang == "fr" {
+        ("Afficher", "Quitter AQBot")
+    } else if lang == "de" {
+        ("Anzeigen", "AQBot beenden")
+    } else if lang == "es" {
+        ("Mostrar", "Salir de AQBot")
+    } else if lang == "ru" {
+        ("Показать", "Выйти из AQBot")
+    } else if lang == "hi" {
+        ("दिखाएं", "AQBot छोड़ें")
+    } else if lang == "ar" {
+        ("عرض", "إنهاء AQBot")
     } else {
         ("显示主窗口", "退出 AQBot")
     }
