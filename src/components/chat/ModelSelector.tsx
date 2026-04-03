@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Tag, Modal, Input, theme, Tooltip, Button, Checkbox } from 'antd';
-import { Search, Settings, Pin, PinOff, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Eye, Wrench, Lightbulb, Mic, MessageSquare, Check } from 'lucide-react';
+import { Search, Settings, Pin, PinOff, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Eye, Wrench, Lightbulb, Mic, MessageSquare, Check, LayoutGrid } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { useTranslation } from 'react-i18next';
 import { useProviderStore, useConversationStore, useSettingsStore, useUIStore } from '@/stores';
@@ -305,6 +305,13 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
     overscan: 10,
   });
 
+  // Reset scroll to top when search changes so filtered results are visible
+  useEffect(() => {
+    if (search) {
+      virtualizer.scrollToIndex(0);
+    }
+  }, [search, virtualizer]);
+
   const renderModelItem = (
     providerId: string,
     modelId: string,
@@ -422,7 +429,12 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
             </Button>
           </div>
         ) : null}
-        title={multiSelect ? t('chat.multiModel.selectTitle', '选择同时回答的模型') : null}
+        title={multiSelect ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, paddingLeft: 4 }}>
+            <LayoutGrid size={16} />
+            {t('chat.multiModel.selectTitle', '选择同时回答的模型')}
+          </span>
+        ) : null}
         closable={false}
         width={420}
         styles={{
@@ -528,7 +540,7 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
                     style={{
                       position: 'absolute', top: 0, left: 0, width: '100%',
                       transform: `translateY(${virtualRow.start}px)`,
-                      padding: '2px 6px',
+                      padding: '2px 8px',
                     }}
                   >
                     <div
@@ -538,7 +550,7 @@ export function ModelSelector({ style, onSelect, overrideCurrentModel, children,
                     >
                       {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       <ModelIcon model={row.provider.models[0]?.model_id ?? row.provider.name} size={20} type="avatar" />
-                      <span style={{ fontWeight: 600 }}>{row.provider.name}</span>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{row.provider.name}</span>
                       <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px', margin: 0 }}>{row.provider.models.length}</Tag>
                       <div style={{ flex: 1 }} />
                       <Settings
