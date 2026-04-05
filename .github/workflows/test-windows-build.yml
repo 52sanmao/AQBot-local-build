@@ -65,3 +65,18 @@ jobs:
           prerelease: true
           tauriScript: pnpm tauri
           args: --target x86_64-pc-windows-msvc
+
+      - name: Package Windows portable (zip)
+        shell: pwsh
+        run: |
+          $exe = "src-tauri/target/x86_64-pc-windows-msvc/release/AQBot.exe"
+          $zipName = "AQBot_${{ github.ref_name }}_windows-x64-portable.zip"
+          Compress-Archive -Path $exe -DestinationPath $zipName
+
+      - name: Upload Windows portable to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: AQBot_${{ github.ref_name }}_windows-x64-portable.zip

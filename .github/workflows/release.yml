@@ -157,6 +157,24 @@ jobs:
           args: --target ${{ matrix.target }}
           includeUpdaterJson: true
 
+      - name: Package Windows portable (zip)
+        if: contains(matrix.target, 'windows')
+        shell: pwsh
+        run: |
+          $exe = "src-tauri/target/${{ matrix.target }}/release/AQBot.exe"
+          $arch = if ("${{ matrix.target }}" -match "aarch64") { "arm64" } else { "x64" }
+          $zipName = "AQBot_${{ github.ref_name }}_windows-${arch}-portable.zip"
+          Compress-Archive -Path $exe -DestinationPath $zipName
+
+      - name: Upload Windows portable to release
+        if: contains(matrix.target, 'windows')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: AQBot_${{ github.ref_name }}_windows-*-portable.zip
+
   # ── Build for Linux ARM64 (cross-compile) ──────────────
   release-linux-arm:
     name: Build (aarch64-unknown-linux-gnu)
