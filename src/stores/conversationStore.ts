@@ -33,6 +33,8 @@ interface StreamBuffer {
   content: string;
   /** The real message ID resolved from the backend (may differ from initial placeholder) */
   resolvedId: string | null;
+  /** Accumulated thinking/reasoning content */
+  thinking: string | null;
 }
 let _streamBuffer: StreamBuffer | null = null;
 // Prefix injected before streaming content (e.g., search result tags)
@@ -355,7 +357,7 @@ function appendStreamChunk(
   // (parallel multi-model streams would corrupt the shared buffer)
   if (!_isMultiModelActive) {
     if (!_streamBuffer || _streamBuffer.conversationId !== conversationId) {
-      _streamBuffer = { messageId, conversationId, content: _streamPrefix, resolvedId: null };
+      _streamBuffer = { messageId, conversationId, content: _streamPrefix, resolvedId: null, thinking: null };
       _streamPrefix = ''; // consumed
     }
     _streamBuffer.content += content ?? '';
