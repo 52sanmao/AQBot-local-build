@@ -198,6 +198,26 @@ export function InputArea() {
     } catch { setCompanionModels([]); }
   }, [companionStorageKey]);
 
+  // Pick up pending prompt text from welcome cards and send through the proper pipeline
+  const pendingPromptText = useConversationStore((s) => s.pendingPromptText);
+  useEffect(() => {
+    if (!pendingPromptText) return;
+    useConversationStore.getState().setPendingPromptText(null);
+    const text = pendingPromptText;
+    (async () => {
+      try {
+        if (companionModels.length > 0) {
+          await sendMultiModelMessage(text, companionModels, undefined, searchEnabled ? searchProviderId : null);
+        } else {
+          await sendMessage(text, undefined, searchEnabled ? searchProviderId : null);
+        }
+      } catch (e) {
+        console.error('[InputArea] pendingPromptText send error:', e);
+        messageApi.error(String(e));
+      }
+    })();
+  }, [pendingPromptText]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Search dropdown menu items
   const searchMenuItems = useMemo(() => {
     const available = searchProviders;

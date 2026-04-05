@@ -1456,7 +1456,6 @@ export function ChatView() {
   const titleGeneratingConversationId = useConversationStore((s) => s.titleGeneratingConversationId);
   const regenerateTitle = useConversationStore((s) => s.regenerateTitle);
   const loadOlderMessages = useConversationStore((s) => s.loadOlderMessages);
-  const sendMessage = useConversationStore((s) => s.sendMessage);
   const regenerateMessage = useConversationStore((s) => s.regenerateMessage);
   const deleteMessageGroup = useConversationStore((s) => s.deleteMessageGroup);
   const removeContextClear = useConversationStore((s) => s.removeContextClear);
@@ -1736,13 +1735,14 @@ export function ChatView() {
           await createConversation(text.slice(0, 30), model.model_id, provider.id);
         }
 
-        await sendMessage(text);
+        // Route through InputArea's send pipeline so companion models are respected
+        useConversationStore.getState().setPendingPromptText(text);
       } catch (e) {
         console.error('[handlePromptClick] error:', e);
         messageApi.error(String(e));
       }
     },
-    [activeConversationId, providers, settings, createConversation, sendMessage, messageApi, t],
+    [activeConversationId, providers, settings, createConversation, messageApi, t],
   );
 
   // ── Bubble items (only show active messages) ────────────────────────

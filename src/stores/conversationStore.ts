@@ -339,6 +339,9 @@ interface ConversationState {
     attachments?: AttachmentInput[],
     searchProviderId?: string | null,
   ) => Promise<void>;
+  /** Pending prompt text from welcome cards — InputArea picks it up and sends with companion awareness */
+  pendingPromptText: string | null;
+  setPendingPromptText: (text: string | null) => void;
 }
 
 function appendStreamChunk(
@@ -494,6 +497,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   pendingCompanionModels: [],
   multiModelParentId: null,
   multiModelDoneMessageIds: [],
+  pendingPromptText: null,
+  setPendingPromptText: (text) => set({ pendingPromptText: text }),
   searchEnabled: false,
   searchProviderId: null,
   enabledMcpServerIds: [],
