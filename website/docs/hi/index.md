@@ -30,6 +30,9 @@ features:
   - icon: 🤖
     title: मल्टी-मॉडल चैट
     details: OpenAI, Claude, Gemini, DeepSeek, Qwen और किसी भी कम्पैटिबल API से कनेक्ट करें। मल्टी-की रोटेशन, स्ट्रीमिंग आउटपुट, थिंकिंग ब्लॉक्स।
+  - icon: 🧠
+    title: AI Agent (Beta)
+    details: Agent मोड से स्वायत्त कार्य निष्पादन। फ़ाइलें पढ़ना/लिखना, कमांड चलाना, कोड विश्लेषण — तीन अनुमति स्तर + कार्य निर्देशिका सैंडबॉक्स।
   - icon: 🔌
     title: MCP टूल कॉलिंग
     details: Model Context Protocol का पूर्ण कार्यान्वयन। stdio, SSE, StreamableHTTP सपोर्ट। एक क्लिक में बाहरी टूल्स कनेक्ट करें। @aqbot/fetch जैसे बिल्ट-इन MCP टूल्स।

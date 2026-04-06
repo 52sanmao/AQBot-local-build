@@ -24,6 +24,14 @@
 - **Gesprächskomprimierung** — Lange Gespräche automatisch komprimieren und dabei wichtige Informationen beibehalten, um Kontextraum zu sparen
 - **Simultane Multi-Modell-Antwort** — Dieselbe Frage gleichzeitig an mehrere Modelle stellen, mit seitenweisem Antwortvergleich
 
+### AI Agent
+
+- **Agent-Modus** — Wechseln Sie in den Agent-Modus für die autonome Ausführung mehrstufiger Aufgaben: Dateien lesen/schreiben, Befehle ausführen, Code analysieren und mehr
+- **Drei Berechtigungsstufen** — Standard (Schreibvorgänge erfordern Genehmigung), Bearbeitungen akzeptieren (Dateiänderungen automatisch genehmigen), Vollzugriff (keine Abfragen) — sicher und kontrollierbar
+- **Arbeitsverzeichnis-Sandbox** — Agent-Operationen sind strikt auf das angegebene Arbeitsverzeichnis beschränkt, um unbefugten Zugriff zu verhindern
+- **Werkzeug-Genehmigungspanel** — Echtzeit-Anzeige von Werkzeugaufruf-Anfragen mit einzelner Überprüfung, Ein-Klick „Immer erlauben" oder Ablehnen
+- **Kostenverfolgung** — Echtzeit-Token-Nutzung und Kostenstatistiken pro Sitzung
+
 ### Inhaltsrendering
 
 - **Markdown-Rendering** — Vollständige Unterstützung für Code-Hervorhebung, LaTeX-Mathematikformeln, Tabellen und Aufgabenlisten

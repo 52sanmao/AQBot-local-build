@@ -16,6 +16,23 @@ Connect to the leading AI providers from a single, unified interface. AQBot hand
 - **Conversation Compression** — Automatically compress lengthy conversations, preserving key information to save context space.
 - **Multi-Model Simultaneous Response** — Ask the same question to multiple models at once, with side-by-side comparison of answers.
 
+## AI Agent
+
+AQBot includes a built-in Agent mode that enables the AI to autonomously execute multi-step tasks with fine-grained permission control.
+
+- **Agent Mode** — Switch any conversation to Agent mode for autonomous task execution. The AI can read and write files, run shell commands, analyze code, and perform complex multi-step workflows — all within a controlled environment.
+- **Three Permission Levels** — Choose the right safety level for your workflow:
+  - **Default** — Read operations are auto-approved; writes and command execution require explicit user approval
+  - **Accept Edits** — File reads and writes are auto-approved; command execution still requires approval
+  - **Full Access** — All operations proceed without prompts (path safety checks still enforced)
+- **Working Directory Sandbox** — All Agent file operations are strictly confined to the specified working directory. Path traversal, symlink escapes, and access outside the sandbox are blocked at the system level.
+- **Tool Approval Panel** — Every tool call is displayed in real-time with its parameters. Review each request individually, click "Always Allow" to remember your decision, or deny operations you don't trust.
+- **Cost Tracking** — Monitor token usage and estimated USD cost in real-time for each Agent session.
+
+::: tip Beta Feature
+Agent mode is currently in Beta. It supports OpenAI, Anthropic, and Gemini models via the open-agent-sdk.
+:::
+
 ## Content Rendering
 
 AQBot goes far beyond plain-text chat with a rich, interactive rendering pipeline.

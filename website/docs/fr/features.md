@@ -16,6 +16,23 @@ Connectez-vous aux principaux fournisseurs d'IA depuis une interface unique et u
 - **Compression de conversation** — Compressez automatiquement les longues conversations en préservant les informations clés.
 - **Réponse simultanée multi-modèles** — Posez la même question à plusieurs modèles à la fois avec comparaison côte à côte.
 
+## AI Agent
+
+AQBot inclut un mode Agent intégré qui permet à l'IA d'exécuter de manière autonome des tâches multi-étapes avec un contrôle fin des permissions.
+
+- **Mode Agent** — Basculez n'importe quelle conversation en mode Agent pour l'exécution autonome de tâches. L'IA peut lire et écrire des fichiers, exécuter des commandes shell, analyser du code et réaliser des workflows complexes multi-étapes — le tout dans un environnement contrôlé
+- **Trois niveaux de permissions** — Choisissez le niveau de sécurité adapté à votre flux de travail :
+  - **Par défaut** — Les opérations de lecture sont automatiquement approuvées ; les écritures et l'exécution de commandes nécessitent l'approbation explicite de l'utilisateur
+  - **Accepter les modifications** — Les lectures et écritures de fichiers sont automatiquement approuvées ; l'exécution de commandes nécessite toujours une approbation
+  - **Accès complet** — Toutes les opérations se déroulent sans invite (les vérifications de sécurité des chemins restent actives)
+- **Sandbox de répertoire de travail** — Toutes les opérations de fichiers de l'Agent sont strictement confinées au répertoire de travail spécifié. La traversée de chemins, les échappements par liens symboliques et l'accès en dehors du sandbox sont bloqués au niveau système
+- **Panneau d'approbation des outils** — Chaque appel d'outil est affiché en temps réel avec ses paramètres. Examinez chaque demande individuellement, cliquez sur « Toujours autoriser » pour mémoriser votre décision, ou refusez les opérations non fiables
+- **Suivi des coûts** — Surveillez l'utilisation des tokens et le coût estimé en USD en temps réel pour chaque session Agent
+
+::: tip Fonctionnalité Beta
+Le mode Agent est actuellement en Beta. Il prend en charge les modèles OpenAI, Anthropic et Gemini via open-agent-sdk.
+:::
+
 ## Rendu de contenu
 
 AQBot va bien au-delà du chat en texte brut avec un pipeline de rendu riche et interactif.

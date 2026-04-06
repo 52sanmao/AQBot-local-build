@@ -30,6 +30,9 @@ features:
   - icon: 🤖
     title: マルチモデルチャット
     details: OpenAI、Claude、Gemini、DeepSeek、Qwen などすべての互換 API に接続。マルチキーローテーション、ストリーミング出力、思考ブロック対応。
+  - icon: 🧠
+    title: AI Agent (Beta)
+    details: Agent モードで自律的なタスク実行。ファイルの読み書き、コマンド実行、コード分析——3段階の権限制御と作業ディレクトリサンドボックスで安全に制御。
   - icon: 🔌
     title: MCP ツール呼び出し
     details: Model Context Protocol を完全実装。stdio、SSE、StreamableHTTP をサポート。ワンクリックで外部ツールに接続、@aqbot/fetch などのビルトイン MCP ツール付き。

@@ -33,6 +33,9 @@ features:
   - icon: 🤖
     title: 多模型对话
     details: 接入 OpenAI、Claude、Gemini、DeepSeek、Qwen 等所有兼容 API。多密钥轮询、流式输出、Thinking 折叠展开。
+  - icon: 🧠
+    title: AI Agent (Beta)
+    details: 切换至 Agent 模式，AI 自主执行任务。读写文件、运行命令、分析代码——三级权限控制 + 工作目录沙箱，安全可控。
   - icon: 🔌
     title: MCP 工具调用
     details: 完整实现 Model Context Protocol，支持 stdio、SSE、StreamableHTTP。一键连接外部工具，内置 @aqbot/fetch 等 MCP 工具。

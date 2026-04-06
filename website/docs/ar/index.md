@@ -30,6 +30,9 @@ features:
   - icon: 🤖
     title: محادثة متعددة النماذج
     details: اتصل بـ OpenAI وClaude وGemini وDeepSeek وQwen وأي API متوافق. تدوير مفاتيح متعددة، مخرجات streaming، كتل التفكير.
+  - icon: 🧠
+    title: AI Agent (Beta)
+    details: وضع Agent للتنفيذ التلقائي للمهام. قراءة/كتابة الملفات، تشغيل الأوامر، تحليل الكود — ثلاثة مستويات أذونات + صندوق حماية دليل العمل.
   - icon: 🔌
     title: استدعاء أدوات MCP
     details: تطبيق كامل لبروتوكول Model Context Protocol. دعم stdio وSSE وStreamableHTTP. اتصل بالأدوات الخارجية بنقرة واحدة. أدوات MCP مدمجة مثل @aqbot/fetch.

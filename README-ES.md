@@ -24,6 +24,14 @@
 - **Compresión de conversación** — Comprimir automáticamente conversaciones largas preservando información clave para ahorrar espacio de contexto
 - **Respuesta simultánea multi-modelo** — Hacer la misma pregunta a múltiples modelos a la vez, con comparación de respuestas en paralelo
 
+### AI Agent
+
+- **Modo Agent** — Cambia al modo Agent para la ejecución autónoma de tareas de múltiples pasos: leer/escribir archivos, ejecutar comandos, analizar código y más
+- **Tres niveles de permisos** — Predeterminado (escrituras necesitan aprobación), Aceptar ediciones (aprobar cambios de archivos automáticamente), Acceso completo (sin indicaciones) — seguro y controlable
+- **Sandbox de directorio de trabajo** — Las operaciones del Agent están estrictamente limitadas al directorio de trabajo especificado, previniendo el acceso no autorizado
+- **Panel de aprobación de herramientas** — Visualización en tiempo real de solicitudes de llamadas a herramientas con revisión individual, "permitir siempre" con un clic, o denegar
+- **Seguimiento de costos** — Estadísticas de uso de tokens y costos en tiempo real por sesión
+
 ### Renderizado de contenido
 
 - **Renderizado Markdown** — Soporte completo para resaltado de código, fórmulas matemáticas LaTeX, tablas y listas de tareas

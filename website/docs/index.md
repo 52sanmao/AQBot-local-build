@@ -30,6 +30,9 @@ features:
   - icon: 🤖
     title: Multi-Model Chat
     details: Connect to OpenAI, Claude, Gemini, DeepSeek, Qwen, and any OpenAI-compatible API. Multi-key rotation, streaming output, and thinking blocks.
+  - icon: 🧠
+    title: AI Agent (Beta)
+    details: Agent mode for autonomous task execution. Read/write files, run commands, analyze code — with three permission levels and working directory sandboxing.
   - icon: 🔌
     title: MCP Tool Calling
     details: Full Model Context Protocol support — stdio, SSE, StreamableHTTP. Connect external tools with one click. Built-in MCP tools like @aqbot/fetch.

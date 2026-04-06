@@ -24,6 +24,14 @@
 - **Conversation Compression** — Automatically compress lengthy conversations, preserving key information to save context space
 - **Multi-Model Simultaneous Response** — Ask the same question to multiple models at once, with side-by-side comparison of answers
 
+### AI Agent
+
+- **Agent Mode** — Switch to Agent mode for autonomous multi-step task execution: read/write files, run commands, analyze code, and more
+- **Three Permission Levels** — Default (writes need approval), Accept Edits (auto-approve file changes), Full Access (no prompts) — safe and controllable
+- **Working Directory Sandbox** — Agent operations are strictly confined to the specified working directory, preventing unauthorized access
+- **Tool Approval Panel** — Real-time display of tool call requests with per-tool review, one-click "always allow", or deny
+- **Cost Tracking** — Real-time token usage and cost statistics per session
+
 ### Content Rendering
 
 - **Markdown Rendering** — Full support for code highlighting, LaTeX math formulas, tables, and task lists

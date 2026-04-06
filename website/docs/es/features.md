@@ -16,6 +16,23 @@ Conéctate a los principales proveedores de IA desde una única interfaz unifica
 - **Compresión de conversaciones** — Comprime automáticamente conversaciones largas preservando información clave.
 - **Respuesta simultánea multi-modelo** — Haz la misma pregunta a varios modelos a la vez con comparación lado a lado.
 
+## AI Agent
+
+AQBot incluye un modo Agent integrado que permite a la IA ejecutar tareas de múltiples pasos de forma autónoma con control de permisos detallado.
+
+- **Modo Agent** — Cambia cualquier conversación al modo Agent para ejecución autónoma de tareas. La IA puede leer y escribir archivos, ejecutar comandos de shell, analizar código y realizar flujos de trabajo complejos de múltiples pasos — todo dentro de un entorno controlado
+- **Tres niveles de permisos** — Elige el nivel de seguridad adecuado para tu flujo de trabajo:
+  - **Predeterminado** — Las operaciones de lectura se aprueban automáticamente; las escrituras y la ejecución de comandos requieren aprobación explícita del usuario
+  - **Aceptar ediciones** — Las lecturas y escrituras de archivos se aprueban automáticamente; la ejecución de comandos aún requiere aprobación
+  - **Acceso completo** — Todas las operaciones proceden sin indicaciones (las verificaciones de seguridad de rutas siguen activas)
+- **Sandbox de directorio de trabajo** — Todas las operaciones de archivos del Agent están estrictamente confinadas al directorio de trabajo especificado. El recorrido de rutas, los escapes por enlaces simbólicos y el acceso fuera del sandbox se bloquean a nivel del sistema
+- **Panel de aprobación de herramientas** — Cada llamada a herramienta se muestra en tiempo real con sus parámetros. Revisa cada solicitud individualmente, haz clic en "Permitir siempre" para recordar tu decisión, o deniega operaciones no confiables
+- **Seguimiento de costos** — Monitorea el uso de tokens y el costo estimado en USD en tiempo real para cada sesión de Agent
+
+::: tip Función Beta
+El modo Agent está actualmente en Beta. Soporta modelos OpenAI, Anthropic y Gemini a través de open-agent-sdk.
+:::
+
 ## Renderizado de contenido
 
 AQBot va mucho más allá del chat de texto plano con un pipeline de renderizado rico e interactivo.

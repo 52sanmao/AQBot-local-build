@@ -16,6 +16,23 @@ Verbinden Sie sich über eine einzige, einheitliche Oberfläche mit den führend
 - **Gesprächskomprimierung** — Lange Gespräche automatisch komprimieren und wichtige Informationen bewahren.
 - **Multi-Modell-Simultanantwort** — Stellen Sie dieselbe Frage gleichzeitig mehreren Modellen mit Nebeneinander-Vergleich.
 
+## AI Agent
+
+AQBot enthält einen integrierten Agent-Modus, der es der KI ermöglicht, mehrstufige Aufgaben autonom mit feingranularer Berechtigungskontrolle auszuführen.
+
+- **Agent-Modus** — Wechseln Sie jedes Gespräch in den Agent-Modus für autonome Aufgabenausführung. Die KI kann Dateien lesen und schreiben, Shell-Befehle ausführen, Code analysieren und komplexe mehrstufige Workflows durchführen — alles in einer kontrollierten Umgebung
+- **Drei Berechtigungsstufen** — Wählen Sie die richtige Sicherheitsstufe für Ihren Workflow:
+  - **Standard** — Leseoperationen werden automatisch genehmigt; Schreibvorgänge und Befehlsausführung erfordern explizite Benutzergenehmigung
+  - **Bearbeitungen akzeptieren** — Datei-Lese- und Schreibvorgänge werden automatisch genehmigt; Befehlsausführung erfordert weiterhin Genehmigung
+  - **Vollzugriff** — Alle Operationen werden ohne Abfragen ausgeführt (Pfad-Sicherheitsprüfungen bleiben aktiv)
+- **Arbeitsverzeichnis-Sandbox** — Alle Dateioperationen des Agents sind strikt auf das angegebene Arbeitsverzeichnis beschränkt. Pfadtraversierung, Symlink-Escapes und Zugriff außerhalb der Sandbox werden auf Systemebene blockiert
+- **Werkzeug-Genehmigungspanel** — Jeder Werkzeugaufruf wird in Echtzeit mit seinen Parametern angezeigt. Überprüfen Sie jede Anfrage einzeln, klicken Sie auf „Immer erlauben", um Ihre Entscheidung zu speichern, oder lehnen Sie nicht vertrauenswürdige Operationen ab
+- **Kostenverfolgung** — Überwachen Sie den Token-Verbrauch und die geschätzten USD-Kosten in Echtzeit für jede Agent-Sitzung
+
+::: tip Beta-Funktion
+Der Agent-Modus befindet sich derzeit in der Beta-Phase. Er unterstützt OpenAI, Anthropic und Gemini-Modelle über open-agent-sdk.
+:::
+
 ## Content-Rendering
 
 AQBot geht weit über einfachen Textchat hinaus mit einer reichhaltigen, interaktiven Rendering-Pipeline.
