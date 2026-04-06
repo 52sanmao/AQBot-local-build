@@ -24,6 +24,7 @@ pub struct AppState {
     pub vector_store: Arc<aqbot_core::vector_store::VectorStore>,
     pub stream_cancel_flags: Arc<Mutex<std::collections::HashMap<String, Arc<AtomicBool>>>>,
     pub agent_permission_senders: Arc<Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<String>>>>,
+    pub agent_always_allowed: Arc<Mutex<std::collections::HashMap<String, std::collections::HashSet<String>>>>,
 }
 
 mod commands;
@@ -405,6 +406,7 @@ pub fn run() {
                 vector_store: Arc::new(vector_store),
                 stream_cancel_flags: Arc::new(Mutex::new(std::collections::HashMap::new())),
                 agent_permission_senders: Arc::new(Mutex::new(std::collections::HashMap::new())),
+                agent_always_allowed: Arc::new(Mutex::new(std::collections::HashMap::new())),
             });
 
             // Reset any agent sessions that were running when app crashed/closed

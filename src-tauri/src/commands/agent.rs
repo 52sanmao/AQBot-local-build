@@ -292,7 +292,8 @@ pub async fn agent_query(
         &session.permission_mode,
     );
     let cwd_for_check = session.cwd.clone().unwrap_or_default();
-    let always_allowed: Arc<RwLock<HashSet<String>>> = Arc::new(RwLock::new(HashSet::new()));
+    let always_allowed_map = state.agent_always_allowed.clone();
+    let conv_id_for_allowed = conversation_id.clone();
     let permission_senders = state.agent_permission_senders.clone();
     let app_for_perm = app.clone();
     let conv_id_for_perm = conversation_id.clone();
@@ -305,10 +306,11 @@ pub async fn agent_query(
         let tool_name = tool_name.to_string();
         let input = input.clone();
         let cwd = cwd_for_check.clone();
-        let always_allowed = always_allowed.clone();
+        let always_allowed_map = always_allowed_map.clone();
+        let conv_id = conv_id_for_perm.clone();
+        let conv_id_allowed = conv_id_for_allowed.clone();
         let permission_senders = permission_senders.clone();
         let app = app_for_perm.clone();
-        let conv_id = conv_id_for_perm.clone();
         let assistant_id = current_assistant_id_for_perm.clone();
         let db = db_for_perm.clone();
 
@@ -322,9 +324,14 @@ pub async fn agent_query(
                 }
             }
 
-            // 2. Check always_allowed cache
-            if always_allowed.read().await.contains(&tool_name) {
-                return PermissionDecision::Allow;
+            // 2. Check conversation-level always_allowed cache
+            {
+                let map = always_allowed_map.lock().await;
+                if let Some(set) = map.get(&conv_id_allowed) {
+                    if set.contains(&tool_name) {
+                        return PermissionDecision::Allow;
+                    }
+                }
             }
 
             // 3. Decision matrix
@@ -384,7 +391,10 @@ pub async fn agent_query(
                         Ok(decision_str) => match decision_str.as_str() {
                             "allow_once" => PermissionDecision::Allow,
                             "allow_always" => {
-                                always_allowed.write().await.insert(tool_name.clone());
+                                always_allowed_map.lock().await
+                                    .entry(conv_id_allowed.clone())
+                                    .or_default()
+                                    .insert(tool_name.clone());
                                 PermissionDecision::Allow
                             }
                             "deny" => PermissionDecision::Deny(
