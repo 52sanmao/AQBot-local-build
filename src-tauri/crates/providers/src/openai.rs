@@ -100,6 +100,8 @@ struct OpenAIChoice {
 struct OpenAIMessageResp {
     content: Option<String>,
     reasoning_content: Option<String>,
+    reasoning: Option<String>,
+    reasoning_details: Option<Vec<ReasoningDetail>>,
     tool_calls: Option<Vec<OpenAIToolCallDelta>>,
 }
 
@@ -107,7 +109,33 @@ struct OpenAIMessageResp {
 struct OpenAIDelta {
     content: Option<String>,
     reasoning_content: Option<String>,
+    reasoning: Option<String>,
+    reasoning_details: Option<Vec<ReasoningDetail>>,
     tool_calls: Option<Vec<OpenAIToolCallDelta>>,
+}
+
+#[derive(Deserialize)]
+struct ReasoningDetail {
+    text: Option<String>,
+}
+
+/// Extract thinking text from delta/message fields.
+/// Priority: reasoning_content > reasoning > reasoning_details[0].text
+fn extract_thinking(
+    reasoning_content: &Option<String>,
+    reasoning: &Option<String>,
+    reasoning_details: &Option<Vec<ReasoningDetail>>,
+) -> Option<String> {
+    if reasoning_content.is_some() {
+        return reasoning_content.clone();
+    }
+    if reasoning.is_some() {
+        return reasoning.clone();
+    }
+    reasoning_details
+        .as_ref()
+        .and_then(|details| details.first())
+        .and_then(|d| d.text.clone())
 }
 
 #[derive(Deserialize)]
@@ -444,7 +472,7 @@ impl ProviderAdapter for OpenAIAdapter {
             id: oai.id.unwrap_or_default(),
             model: oai.model.unwrap_or_else(|| request.model.clone()),
             content: msg.content.clone().unwrap_or_default(),
-            thinking: msg.reasoning_content.clone(),
+            thinking: extract_thinking(&msg.reasoning_content, &msg.reasoning, &msg.reasoning_details),
             usage,
             tool_calls,
         })
@@ -585,7 +613,7 @@ impl ProviderAdapter for OpenAIAdapter {
                                         });
                                         let _ = tx.unbounded_send(Ok(ChatStreamChunk {
                                             content: delta.content.clone(),
-                                            thinking: delta.reasoning_content.clone(),
+                                            thinking: extract_thinking(&delta.reasoning_content, &delta.reasoning, &delta.reasoning_details),
                                             done: false,
                                             is_final: None,
                                             usage,
