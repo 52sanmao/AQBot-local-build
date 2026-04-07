@@ -128,6 +128,15 @@ pub struct AgentThinkingPayload {
     pub thinking: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentTextPayload {
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    #[serde(rename = "assistantMessageId")]
+    pub assistant_message_id: String,
+    pub text: String,
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -487,6 +496,9 @@ pub async fn agent_query(
         let mut sdk_messages: Option<Vec<open_agent_sdk::Message>> = None;
         let mut current_assistant_msg_id: Option<String> = None;
         let mut accumulated_text = String::new();
+        let mut accumulated_thinking = String::new();
+        let mut in_thinking_block = false;
+        let mut has_streamed_deltas = false;
         let mut got_result_or_error = false;
         // Map SDK tool_use_id → DB tool_execution.id
         let mut tool_exec_map: HashMap<String, String> = HashMap::new();
@@ -497,33 +509,62 @@ pub async fn agent_query(
                     // Two-pass processing: first create/update the assistant message,
                     // then emit tool_use events with the correct assistant message ID.
 
-                    // Pass 1: collect text and thinking
-                    let mut text_parts = Vec::new();
-                    for block in &msg.content {
-                        match block {
-                            ContentBlock::Text { text } => {
-                                text_parts.push(text.as_str());
+                    // Pass 1: collect text and thinking (only if deltas weren't already streamed)
+                    if !has_streamed_deltas {
+                        let mut text_parts = Vec::new();
+                        for block in &msg.content {
+                            match block {
+                                ContentBlock::Text { text } => {
+                                    text_parts.push(text.as_str());
+                                }
+                                ContentBlock::Thinking { thinking, .. } => {
+                                    if !in_thinking_block {
+                                        if !accumulated_text.is_empty() {
+                                            accumulated_text.push_str("\n\n");
+                                        }
+                                        accumulated_text.push_str("<think data-aqbot=\"1\">\n");
+                                        in_thinking_block = true;
+                                    }
+                                    accumulated_text.push_str(thinking);
+                                    accumulated_thinking.push_str(thinking);
+
+                                    let _ = app.emit(
+                                        "agent-stream-thinking",
+                                        AgentThinkingPayload {
+                                            conversation_id: conv_id.clone(),
+                                            assistant_message_id: current_assistant_msg_id
+                                                .clone()
+                                                .unwrap_or_default(),
+                                            thinking: thinking.clone(),
+                                        },
+                                    );
+                                }
+                                _ => {}
                             }
-                            ContentBlock::Thinking { thinking, .. } => {
-                                let _ = app.emit(
-                                    "agent-stream-thinking",
-                                    AgentThinkingPayload {
-                                        conversation_id: conv_id.clone(),
-                                        assistant_message_id: current_assistant_msg_id
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        thinking: thinking.clone(),
-                                    },
-                                );
+                        }
+
+                        let new_text: String = text_parts.join("");
+                        if !new_text.is_empty() {
+                            if in_thinking_block {
+                                accumulated_text.push_str("\n</think>\n\n");
+                                in_thinking_block = false;
                             }
-                            _ => {}
+                            accumulated_text.push_str(&new_text);
+
+                            let _ = app.emit(
+                                "agent-stream-text",
+                                AgentTextPayload {
+                                    conversation_id: conv_id.clone(),
+                                    assistant_message_id: current_assistant_msg_id
+                                        .clone()
+                                        .unwrap_or_default(),
+                                    text: new_text,
+                                },
+                            );
                         }
                     }
-
-                    let new_text: String = text_parts.join("");
-                    if !new_text.is_empty() {
-                        accumulated_text.push_str(&new_text);
-                    }
+                    // Reset delta flag for next turn
+                    has_streamed_deltas = false;
 
                     // Create or update assistant message BEFORE emitting tool events
                     if current_assistant_msg_id.is_none() {
@@ -752,6 +793,50 @@ pub async fn agent_query(
                     .await;
                     return;
                 }
+                SDKMessage::ThinkingDelta { thinking } => {
+                    // Real-time thinking token from API stream
+                    has_streamed_deltas = true;
+                    if !in_thinking_block {
+                        if !accumulated_text.is_empty() {
+                            accumulated_text.push_str("\n\n");
+                        }
+                        accumulated_text.push_str("<think data-aqbot=\"1\">\n");
+                        in_thinking_block = true;
+                    }
+                    accumulated_text.push_str(&thinking);
+                    accumulated_thinking.push_str(&thinking);
+
+                    let _ = app.emit(
+                        "agent-stream-thinking",
+                        AgentThinkingPayload {
+                            conversation_id: conv_id.clone(),
+                            assistant_message_id: current_assistant_msg_id
+                                .clone()
+                                .unwrap_or_default(),
+                            thinking,
+                        },
+                    );
+                }
+                SDKMessage::TextDelta { text } => {
+                    // Real-time text token from API stream
+                    has_streamed_deltas = true;
+                    if in_thinking_block {
+                        accumulated_text.push_str("\n</think>\n\n");
+                        in_thinking_block = false;
+                    }
+                    accumulated_text.push_str(&text);
+
+                    let _ = app.emit(
+                        "agent-stream-text",
+                        AgentTextPayload {
+                            conversation_id: conv_id.clone(),
+                            assistant_message_id: current_assistant_msg_id
+                                .clone()
+                                .unwrap_or_default(),
+                            text,
+                        },
+                    );
+                }
                 _ => {
                     tracing::debug!("[agent] unhandled SDKMessage: {:?}", msg);
                 }
@@ -803,17 +888,31 @@ pub async fn agent_query(
             return;
         }
 
-        // Update assistant message with final result text if we have one
-        if !result_text.is_empty() {
+        // Build final content with thinking embedded as <think> tags
+        let mut final_content = accumulated_text.clone();
+        // Close any unclosed thinking block
+        if in_thinking_block {
+            final_content.push_str("\n</think>\n\n");
+        }
+        // Append result_text if it has content not yet in accumulated_text
+        if !result_text.is_empty() && !accumulated_text.contains(&result_text) {
+            if in_thinking_block {
+                // thinking was just closed above
+            }
+            final_content.push_str(&result_text);
+        }
+
+        // Update assistant message with final content (including <think> blocks)
+        if !final_content.is_empty() {
             if let Some(ref mid) = current_assistant_msg_id {
-                let _ = message::update_message_content(&db, mid, &result_text).await;
+                let _ = message::update_message_content(&db, mid, &final_content).await;
             } else {
                 // No assistant message was created during streaming — create one now
                 if let Ok(assist_msg) = message::create_message(
                     &db,
                     &conv_id,
                     MessageRole::Assistant,
-                    &result_text,
+                    &final_content,
                     &[],
                     Some(&user_msg_id),
                     0,
@@ -849,7 +948,7 @@ pub async fn agent_query(
                 assistant_message_id: current_assistant_msg_id
                     .clone()
                     .unwrap_or_default(),
-                text: result_text.clone(),
+                text: final_content.clone(),
                 usage: usage_payload,
                 num_turns: Some(num_turns),
                 cost_usd: Some(cost_usd),

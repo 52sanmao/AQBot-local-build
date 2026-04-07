@@ -6,7 +6,7 @@ use open_agent_sdk::api::provider::ProviderRequest;
 use open_agent_sdk::api::ApiError;
 use open_agent_sdk::types::{ImageContentSource, ToolResultContentBlock};
 use open_agent_sdk::{
-    ApiType, ContentBlock, LLMProvider, Message, MessageRole, ProviderResponse, Usage,
+    ApiType, ContentBlock, LLMProvider, Message, MessageRole, ProviderResponse, SDKMessage, Usage,
 };
 
 use aqbot_core::types::{
@@ -76,6 +76,7 @@ impl LLMProvider for AQBotProviderBridge {
     async fn create_message(
         &self,
         request: ProviderRequest<'_>,
+        stream_tx: Option<tokio::sync::mpsc::Sender<SDKMessage>>,
     ) -> Result<ProviderResponse, ApiError> {
         let chat_request = convert_request(request);
 
@@ -91,6 +92,13 @@ impl LLMProvider for AQBotProviderBridge {
                     if let Some(ref text) = chunk.content {
                         if !text.is_empty() {
                             accumulated_text.push_str(text);
+
+                            // Emit streaming text delta via SDK channel
+                            if let Some(ref tx) = stream_tx {
+                                let _ = tx.try_send(SDKMessage::TextDelta {
+                                    text: text.clone(),
+                                });
+                            }
 
                             // Emit streaming text chunk to frontend
                             if let Some(app) = &self.app {
@@ -108,6 +116,13 @@ impl LLMProvider for AQBotProviderBridge {
                     if let Some(ref thinking) = chunk.thinking {
                         if !thinking.is_empty() {
                             accumulated_thinking.push_str(thinking);
+
+                            // Emit streaming thinking delta via SDK channel
+                            if let Some(ref tx) = stream_tx {
+                                let _ = tx.try_send(SDKMessage::ThinkingDelta {
+                                    thinking: thinking.clone(),
+                                });
+                            }
                         }
                     }
 

@@ -1339,7 +1339,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           if (event.payload.conversationId !== conversationId) return;
           const realId = event.payload.assistantMessageId;
           const oldId = currentMsgId;
-          console.log(`[sendAgentMessage] agent-message-id received: ${oldId} → ${realId}`);
           currentMsgId = realId;
           set((s) => ({
             streamingMessageId: realId,
@@ -1353,29 +1352,51 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         listen<AgentStreamTextEvent>('agent-stream-text', (event) => {
           if (event.payload.conversationId !== conversationId) return;
 
-          set((s) => ({
-            messages: s.messages.map((m) => {
-              if (m.id === currentMsgId) {
-                return { ...m, content: (m.content || '') + event.payload.text };
-              }
-              return m;
-            }),
-          }));
+          set((s) => {
+            const wasThinking = s.thinkingActiveMessageIds.has(currentMsgId);
+            const nextThinkingIds = wasThinking
+              ? (() => { const n = new Set(s.thinkingActiveMessageIds); n.delete(currentMsgId); return n; })()
+              : s.thinkingActiveMessageIds;
+
+            return {
+              thinkingActiveMessageIds: nextThinkingIds,
+              messages: s.messages.map((m) => {
+                if (m.id === currentMsgId) {
+                  let content = m.content || '';
+                  // Close the <think> block when text content starts arriving
+                  if (wasThinking) {
+                    content += '\n</think>\n\n';
+                  }
+                  content += event.payload.text;
+                  return { ...m, content };
+                }
+                return m;
+              }),
+            };
+          });
         }).then((fn) => { unlistenStreamText = fn; });
 
-        // Listen for incremental thinking chunks
+        // Listen for incremental thinking chunks — embed in content with <think> tags
         listen<AgentStreamThinkingEvent>('agent-stream-thinking', (event) => {
           if (event.payload.conversationId !== conversationId) return;
 
-          set((s) => ({
-            thinkingActiveMessageIds: new Set([...s.thinkingActiveMessageIds, currentMsgId]),
-            messages: s.messages.map((m) => {
-              if (m.id === currentMsgId) {
-                return { ...m, thinking: (m.thinking || '') + event.payload.thinking };
-              }
-              return m;
-            }),
-          }));
+          set((s) => {
+            const wasThinking = s.thinkingActiveMessageIds.has(currentMsgId);
+            return {
+              thinkingActiveMessageIds: new Set([...s.thinkingActiveMessageIds, currentMsgId]),
+              messages: s.messages.map((m) => {
+                if (m.id === currentMsgId) {
+                  let content = m.content || '';
+                  if (!wasThinking) {
+                    content += '<think data-aqbot="1">\n';
+                  }
+                  content += event.payload.thinking;
+                  return { ...m, content, thinking: (m.thinking || '') + event.payload.thinking };
+                }
+                return m;
+              }),
+            };
+          });
         }).then((fn) => { unlistenStreamThinking = fn; });
 
         // Listen for agent-done — correction overwrite with final content
