@@ -68,7 +68,6 @@ impl ProviderProxyConfig {
     pub fn resolve(provider: &Option<Self>, global_settings: &AppSettings) -> Option<Self> {
         if let Some(config) = provider {
             if config.proxy_type.is_some() {
-                // Provider explicitly configured — use it (or "none" to disable)
                 if config.proxy_type.as_deref() == Some("none") {
                     return None;
                 }
@@ -78,6 +77,11 @@ impl ProviderProxyConfig {
         // Fall back to global proxy
         match global_settings.proxy_type.as_deref() {
             Some("none") | None => None,
+            Some("system") => Some(Self {
+                proxy_type: Some("system".to_string()),
+                proxy_address: None,
+                proxy_port: None,
+            }),
             _ => Some(Self {
                 proxy_type: global_settings.proxy_type.clone(),
                 proxy_address: global_settings.proxy_address.clone(),

@@ -170,31 +170,39 @@ pub(crate) fn parse_base64_data_url(url: &str) -> Option<(String, String)> {
 }
 
 /// Build an HTTP client with optional proxy configuration.
-/// When no proxy is configured, system proxy auto-detection is explicitly disabled.
+/// - "system": use system proxy auto-detection (reqwest default)
+/// - "http"/"socks5": use explicit proxy with address/port
+/// - None or "none": disable all proxies
 pub fn build_http_client(proxy_config: Option<&ProviderProxyConfig>) -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder();
 
     if let Some(config) = proxy_config {
-        if let (Some(proxy_type), Some(addr), Some(port)) = (
-            &config.proxy_type,
-            &config.proxy_address,
-            &config.proxy_port,
-        ) {
-            if proxy_type != "none" && !addr.is_empty() {
-                let scheme = if proxy_type == "socks5" {
-                    "socks5"
+        match config.proxy_type.as_deref() {
+            Some("system") => {
+                // Don't call .no_proxy() — let reqwest auto-detect system proxy
+            }
+            Some(proxy_type) if proxy_type != "none" => {
+                if let (Some(addr), Some(port)) = (&config.proxy_address, &config.proxy_port) {
+                    if !addr.is_empty() {
+                        let scheme = if proxy_type == "socks5" {
+                            "socks5"
+                        } else {
+                            "http"
+                        };
+                        let proxy_url = format!("{}://{}:{}", scheme, addr, port);
+                        let proxy = reqwest::Proxy::all(&proxy_url)
+                            .map_err(|e| AQBotError::Provider(format!("Invalid proxy URL: {}", e)))?;
+                        builder = builder.proxy(proxy);
+                    } else {
+                        builder = builder.no_proxy();
+                    }
                 } else {
-                    "http"
-                };
-                let proxy_url = format!("{}://{}:{}", scheme, addr, port);
-                let proxy = reqwest::Proxy::all(&proxy_url)
-                    .map_err(|e| AQBotError::Provider(format!("Invalid proxy URL: {}", e)))?;
-                builder = builder.proxy(proxy);
-            } else {
+                    builder = builder.no_proxy();
+                }
+            }
+            _ => {
                 builder = builder.no_proxy();
             }
-        } else {
-            builder = builder.no_proxy();
         }
     } else {
         builder = builder.no_proxy();

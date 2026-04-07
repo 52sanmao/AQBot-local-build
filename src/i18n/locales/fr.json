@@ -404,6 +404,7 @@
     "proxyAddress": "Adresse du proxy",
     "proxyPort": "Port du proxy",
     "proxyNone": "Aucun",
+    "proxySystem": "Proxy système",
     "proxyHttp": "HTTP",
     "proxySocks5": "SOCKS5",
     "testProxy": "Tester la connexion",

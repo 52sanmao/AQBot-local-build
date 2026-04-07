@@ -1161,6 +1161,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                     }
                     options={[
                       { label: t('settings.proxyNone'), value: 'none' },
+                      { label: t('settings.proxySystem'), value: 'system' },
                       { label: 'HTTP', value: 'http' },
                       { label: 'SOCKS5', value: 'socks5' },
                     ]}
@@ -1180,6 +1181,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                       })
                     }
                     placeholder="127.0.0.1"
+                    disabled={provider.proxy_config?.proxy_type === 'system'}
                   />
                 </Form.Item>
                 <Form.Item label={t('settings.proxyPort')} style={{ marginBottom: 0 }}>
@@ -1199,6 +1201,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                     min={1}
                     max={65535}
                     style={{ width: '100%' }}
+                    disabled={provider.proxy_config?.proxy_type === 'system'}
                   />
                 </Form.Item>
               </Form>

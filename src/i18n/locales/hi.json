@@ -405,6 +405,7 @@
     "proxyAddress": "प्रॉक्सी पता",
     "proxyPort": "प्रॉक्सी पोर्ट",
     "proxyNone": "कोई नहीं",
+    "proxySystem": "सिस्टम प्रॉक्सी",
     "proxyHttp": "HTTP",
     "proxySocks5": "SOCKS5",
     "testProxy": "कनेक्शन टेस्ट करें",

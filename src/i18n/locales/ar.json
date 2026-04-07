@@ -405,6 +405,7 @@
     "proxyAddress": "عنوان الوكيل",
     "proxyPort": "منفذ الوكيل",
     "proxyNone": "لا شيء",
+    "proxySystem": "وكيل النظام",
     "proxyHttp": "HTTP",
     "proxySocks5": "SOCKS5",
     "testProxy": "اختبار الاتصال",

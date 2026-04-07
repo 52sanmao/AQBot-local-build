@@ -405,6 +405,7 @@
     "proxyAddress": "プロキシアドレス",
     "proxyPort": "プロキシポート",
     "proxyNone": "なし",
+    "proxySystem": "システムプロキシ",
     "proxyHttp": "HTTP",
     "proxySocks5": "SOCKS5",
     "testProxy": "接続テスト",

@@ -405,6 +405,7 @@
     "proxyAddress": "Адрес прокси",
     "proxyPort": "Порт прокси",
     "proxyNone": "Нет",
+    "proxySystem": "Системный прокси",
     "proxyHttp": "HTTP",
     "proxySocks5": "SOCKS5",
     "testProxy": "Проверить соединение",

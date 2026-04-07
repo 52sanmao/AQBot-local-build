@@ -43,6 +43,9 @@ export function ProxySettings() {
 
   const rowStyle = { padding: '4px 0' };
 
+  const isSystemProxy = settings.proxy_type === 'system';
+  const needsAddress = !!settings.proxy_type && !isSystemProxy;
+
   return (
     <div className="p-6 pb-12">
       <Card size="small" title={t('settings.groupProxy')}>
@@ -56,6 +59,7 @@ export function ProxySettings() {
             style={{ width: 200 }}
             options={[
               { label: t('settings.proxyNone'), value: 'none' },
+              { label: t('settings.proxySystem'), value: 'system' },
               { label: t('settings.proxyHttp'), value: 'http' },
               { label: t('settings.proxySocks5'), value: 'socks5' },
             ]}
@@ -70,7 +74,7 @@ export function ProxySettings() {
               saveSettings({ proxy_address: e.target.value || null })
             }
             placeholder="127.0.0.1"
-            disabled={!settings.proxy_type}
+            disabled={!needsAddress}
             style={{ width: 280 }}
           />
         </div>
@@ -81,7 +85,7 @@ export function ProxySettings() {
             value={settings.proxy_port}
             onChange={(val) => saveSettings({ proxy_port: val ?? null })}
             placeholder="7890"
-            disabled={!settings.proxy_type}
+            disabled={!needsAddress}
             min={1}
             max={65535}
             style={{ width: 150 }}
@@ -89,7 +93,7 @@ export function ProxySettings() {
         </div>
         <Divider style={{ margin: '4px 0' }} />
         <div style={{ padding: '4px 0', display: 'flex', justifyContent: 'flex-end' }}>
-          <Button onClick={handleTestProxy} disabled={!settings.proxy_type} loading={testing}>
+          <Button onClick={handleTestProxy} disabled={!needsAddress} loading={testing}>
             {t('settings.testProxy')}
           </Button>
         </div>

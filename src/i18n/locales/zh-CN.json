@@ -405,6 +405,7 @@
     "proxyAddress": "代理地址",
     "proxyPort": "代理端口",
     "proxyNone": "不使用代理",
+    "proxySystem": "使用系统代理",
     "proxyHttp": "HTTP",
     "proxySocks5": "SOCKS5",
     "testProxy": "测试连接",
