@@ -102,3 +102,13 @@ pub async fn export_conversation(
         _ => Err(format!("Unsupported export format: {}", format)),
     }
 }
+
+#[tauri::command]
+pub async fn get_conversation_stats(
+    state: State<'_, AppState>,
+    conversation_id: String,
+) -> Result<ConversationStats, String> {
+    aqbot_core::repo::message::get_conversation_stats(&state.sea_db, &conversation_id)
+        .await
+        .map_err(|e| e.to_string())
+}

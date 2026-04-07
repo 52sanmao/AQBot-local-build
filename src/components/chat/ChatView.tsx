@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { CloseCircleFilled, SyncOutlined } from '@ant-design/icons';
 import { Typography, Button, Dropdown, Input, App, Avatar, Alert, Popconfirm, Popover, theme, Tag, Image, Tooltip, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
-import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp, ArrowLeftRight, Zap, Sparkles, TextCursorInput, GitBranch } from 'lucide-react';
+import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp, ArrowLeftRight, Zap, Sparkles, TextCursorInput, GitBranch, ChartNoAxesColumn, MessageSquare, ArrowUpRight, ArrowDownRight, Coins, Clock, Timer } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { getConvIcon } from '@/lib/convIcon';
 import Bubble from '@ant-design/x/es/bubble';
@@ -35,7 +35,7 @@ import PermissionCard from './PermissionCard';
 
 import { invoke } from '@/lib/invoke';
 import { useResolvedAvatarSrc } from '@/hooks/useResolvedAvatarSrc';
-import type { Message, Attachment } from '@/types';
+import type { Message, Attachment, ConversationStats } from '@/types';
 
 // ── markstream-react custom thinking component ──────────────────────────
 
@@ -1617,6 +1617,105 @@ function AssistantFooter({
 
 import { exportAsPNG, exportAsMarkdown, exportAsJSON, exportAsText } from '@/lib/exportChat';
 
+// ── Stats Popover ──────────────────────────────────────────────────────
+
+function StatsPopoverContent({ stats, t, token }: {
+  stats: ConversationStats | null;
+  t: (key: string) => string;
+  token: Record<string, any>;
+}) {
+  if (!stats) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 40px' }}>
+        <Spin size="small" />
+      </div>
+    );
+  }
+
+  const items: Array<{
+    icon: React.ReactNode;
+    label: string;
+    value: string;
+    sub?: Array<{ icon: React.ReactNode; label: string; value: string }>;
+  }> = [
+    {
+      icon: <MessageSquare size={14} />,
+      label: t('chat.stats.totalMessages'),
+      value: stats.total_messages.toLocaleString(),
+      sub: [
+        { icon: <User size={12} />, label: t('chat.stats.userMessages'), value: stats.total_user_messages.toLocaleString() },
+        { icon: <Bot size={12} />, label: t('chat.stats.assistantMessages'), value: stats.total_assistant_messages.toLocaleString() },
+      ],
+    },
+    {
+      icon: <Coins size={14} />,
+      label: t('chat.stats.totalTokens'),
+      value: formatTokenCount(stats.total_tokens),
+      sub: [
+        { icon: <ArrowUpRight size={12} />, label: t('chat.stats.inputTokens'), value: formatTokenCount(stats.total_prompt_tokens) },
+        { icon: <ArrowDownRight size={12} />, label: t('chat.stats.outputTokens'), value: formatTokenCount(stats.total_completion_tokens) },
+      ],
+    },
+    ...(stats.avg_first_token_latency_ms != null ? [{
+      icon: <Zap size={14} />,
+      label: t('chat.stats.avgFirstToken'),
+      value: formatDuration(stats.avg_first_token_latency_ms),
+    }] : []),
+    ...(stats.avg_response_time_ms != null ? [{
+      icon: <Clock size={14} />,
+      label: t('chat.stats.avgResponseTime'),
+      value: formatDuration(stats.avg_response_time_ms),
+    }] : []),
+    ...(stats.avg_tokens_per_second != null ? [{
+      icon: <Timer size={14} />,
+      label: t('chat.stats.avgSpeed'),
+      value: formatSpeed(stats.avg_tokens_per_second),
+    }] : []),
+  ];
+
+  return (
+    <div style={{ minWidth: 220, maxWidth: 280 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <ChartNoAxesColumn size={14} />
+        {t('chat.stats.title')}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {items.map((item, i) => (
+          <div key={i}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: token.colorTextSecondary }}>
+                {item.icon}
+                {item.label}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                {item.value}
+              </span>
+            </div>
+            {item.sub && (
+              <div style={{ marginLeft: 20, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {item.sub.map((s, j) => (
+                  <div key={j} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: token.colorTextDescription }}>
+                      {s.icon}
+                      {s.label}
+                    </span>
+                    <span style={{ fontSize: 12, color: token.colorTextSecondary, fontVariantNumeric: 'tabular-nums' }}>
+                      {s.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {i < items.length - 1 && (
+              <div style={{ borderBottom: `1px solid ${token.colorBorderSecondary}`, marginTop: 10 }} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────
 
 export function ChatView() {
@@ -1736,6 +1835,22 @@ export function ChatView() {
   const [titleDraft, setTitleDraft] = useState('');
   const titleInputRef = useRef<InputRef>(null);
   const skipTitleSaveRef = useRef(false);
+
+  // ── Stats popover state ─────────────────────────────────────────────
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [stats, setStats] = useState<ConversationStats | null>(null);
+  const handleStatsOpenChange = useCallback(async (open: boolean) => {
+    setStatsOpen(open);
+    if (open && activeConversationId) {
+      setStats(null);
+      try {
+        const data = await invoke<ConversationStats>('get_conversation_stats', { conversationId: activeConversationId });
+        setStats(data);
+      } catch {
+        setStats(null);
+      }
+    }
+  }, [activeConversationId]);
   const messageAreaRef = useRef<HTMLDivElement>(null);
   const bubbleListRef = useRef<BubbleListRef | null>(null);
   const scrollBoxRef = useRef<HTMLElement | null>(null);
@@ -2776,6 +2891,17 @@ export function ChatView() {
             <div className="flex-1" />
 
             <ModelSelector />
+            <Popover
+              content={<StatsPopoverContent stats={stats} t={t} token={token} />}
+              trigger="click"
+              open={statsOpen}
+              onOpenChange={handleStatsOpenChange}
+              placement="bottomRight"
+            >
+              <Tooltip title={t('chat.stats.title')}>
+                <Button type="text" icon={<ChartNoAxesColumn size={14} />} size="small" />
+              </Tooltip>
+            </Popover>
             <Dropdown menu={{ items: exportMenuItems }} trigger={['click']}>
               <Button type="text" icon={<Share2 size={14} />} size="small" />
             </Dropdown>

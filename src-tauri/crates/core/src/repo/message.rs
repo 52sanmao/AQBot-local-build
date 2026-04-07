@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use crate::entity::messages;
 use crate::error::{AQBotError, Result};
-use crate::types::{Attachment, Message, MessagePage, MessageRole};
+use crate::types::{Attachment, ConversationStats, Message, MessagePage, MessageRole};
 use crate::utils::{gen_id, now_ts};
 
 fn parse_role(s: &str) -> MessageRole {
@@ -399,6 +399,76 @@ pub async fn create_assistant_tool_call_message(
     .insert(db)
     .await?;
     Ok(id)
+}
+
+pub async fn get_conversation_stats(
+    db: &DatabaseConnection,
+    conversation_id: &str,
+) -> Result<ConversationStats> {
+    use sea_orm::{FromQueryResult, Statement};
+
+    #[derive(Debug, FromQueryResult)]
+    struct StatsRow {
+        total_messages: i64,
+        total_user_messages: i64,
+        total_assistant_messages: i64,
+        total_prompt_tokens: i64,
+        total_completion_tokens: i64,
+        avg_tokens_per_second: Option<f64>,
+        avg_first_token_latency_ms: Option<f64>,
+        avg_response_time_ms: Option<f64>,
+    }
+
+    let sql = r#"
+        SELECT
+            COUNT(*) AS total_messages,
+            SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) AS total_user_messages,
+            SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END) AS total_assistant_messages,
+            COALESCE(SUM(prompt_tokens), 0) AS total_prompt_tokens,
+            COALESCE(SUM(completion_tokens), 0) AS total_completion_tokens,
+            AVG(CASE WHEN tokens_per_second IS NOT NULL AND tokens_per_second > 0 THEN tokens_per_second ELSE NULL END) AS avg_tokens_per_second,
+            AVG(CASE WHEN first_token_latency_ms IS NOT NULL THEN first_token_latency_ms ELSE NULL END) AS avg_first_token_latency_ms,
+            AVG(CASE
+                WHEN first_token_latency_ms IS NOT NULL AND tokens_per_second IS NOT NULL AND tokens_per_second > 0 AND completion_tokens IS NOT NULL AND completion_tokens > 0
+                THEN first_token_latency_ms + (completion_tokens * 1000.0 / tokens_per_second)
+                ELSE NULL
+            END) AS avg_response_time_ms
+        FROM messages
+        WHERE conversation_id = ? AND is_active = 1
+    "#;
+
+    let row = StatsRow::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        sql,
+        vec![conversation_id.into()],
+    ))
+    .one(db)
+    .await?
+    .unwrap_or(StatsRow {
+        total_messages: 0,
+        total_user_messages: 0,
+        total_assistant_messages: 0,
+        total_prompt_tokens: 0,
+        total_completion_tokens: 0,
+        avg_tokens_per_second: None,
+        avg_first_token_latency_ms: None,
+        avg_response_time_ms: None,
+    });
+
+    let total_prompt = row.total_prompt_tokens as u64;
+    let total_completion = row.total_completion_tokens as u64;
+
+    Ok(ConversationStats {
+        total_messages: row.total_messages as u64,
+        total_user_messages: row.total_user_messages as u64,
+        total_assistant_messages: row.total_assistant_messages as u64,
+        total_prompt_tokens: total_prompt,
+        total_completion_tokens: total_completion,
+        total_tokens: total_prompt + total_completion,
+        avg_tokens_per_second: row.avg_tokens_per_second,
+        avg_first_token_latency_ms: row.avg_first_token_latency_ms,
+        avg_response_time_ms: row.avg_response_time_ms,
+    })
 }
 
 #[cfg(test)]

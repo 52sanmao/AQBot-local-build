@@ -218,7 +218,19 @@
     "pinnedModels": "Pinned models",
     "scrollToBottom": "Scroll to bottom",
     "searchModelOrProvider": "Search model or provider",
-    "switchModel": "Switch model"
+    "switchModel": "Switch model",
+    "stats": {
+      "title": "Conversation Stats",
+      "totalMessages": "Total Messages",
+      "totalTokens": "Total Tokens",
+      "inputTokens": "Input Tokens",
+      "outputTokens": "Output Tokens",
+      "avgFirstToken": "Avg First Token",
+      "avgResponseTime": "Avg Response Time",
+      "userMessages": "User Messages",
+      "assistantMessages": "AI Messages",
+      "avgSpeed": "Avg Speed"
+    }
   },
   "gateway": {
     "title": "Gateway",

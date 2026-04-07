@@ -258,6 +258,19 @@ pub struct Message {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationStats {
+    pub total_messages: u64,
+    pub total_user_messages: u64,
+    pub total_assistant_messages: u64,
+    pub total_prompt_tokens: u64,
+    pub total_completion_tokens: u64,
+    pub total_tokens: u64,
+    pub avg_tokens_per_second: Option<f64>,
+    pub avg_first_token_latency_ms: Option<f64>,
+    pub avg_response_time_ms: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessagePage {
     pub messages: Vec<Message>,
     pub has_older: bool,

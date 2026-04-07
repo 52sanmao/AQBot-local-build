@@ -148,6 +148,7 @@ pub fn run() {
             commands::messages::update_message_content,
             commands::messages::clear_conversation_messages,
             commands::messages::export_conversation,
+            commands::messages::get_conversation_stats,
             // artifacts
             commands::artifacts::list_artifacts,
             commands::artifacts::create_artifact,

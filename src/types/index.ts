@@ -163,6 +163,18 @@ export interface MessagePage {
   total_active_count: number;
 }
 
+export interface ConversationStats {
+  total_messages: number;
+  total_user_messages: number;
+  total_assistant_messages: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_tokens: number;
+  avg_tokens_per_second: number | null;
+  avg_first_token_latency_ms: number | null;
+  avg_response_time_ms: number | null;
+}
+
 export interface Attachment {
   id: string;
   file_type: string;
