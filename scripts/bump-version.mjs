@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -33,3 +34,10 @@ for (const rel of files) {
 }
 
 console.log(`\n版本已更新为 ${version}`);
+
+const tag = `v${version}`;
+execSync(`git add package.json src-tauri/tauri.conf.json`, { cwd: root, stdio: 'inherit' });
+execSync(`git commit -m "chore(version): bump version to ${tag}"`, { cwd: root, stdio: 'inherit' });
+execSync(`git tag ${tag}`, { cwd: root, stdio: 'inherit' });
+console.log(`\n🏷️  已创建 commit 和 tag: ${tag}`);
+console.log(`📌 执行 git push && git push --tags 即可触发 release`);
