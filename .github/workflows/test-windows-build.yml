@@ -75,14 +75,14 @@ jobs:
 
           git clone --depth 1 https://github.com/AQBot-Desktop/stream-monaco.git stream-monaco
           cd stream-monaco && pnpm install --frozen-lockfile && pnpm build
-          rm -rf node_modules .git
+          rm -rf .git
           cd ..
 
           git clone --depth 1 -b aqbot-custom https://github.com/AQBot-Desktop/markstream-vue.git markstream-vue
           cd markstream-vue && pnpm install --frozen-lockfile
           pnpm run build:parser
           cd packages/markstream-react && pnpm build && cd ../..
-          rm -rf node_modules packages/*/node_modules playground*/node_modules .git
+          rm -rf .git playground*/node_modules
           cd ..
 
       - name: Install frontend dependencies
