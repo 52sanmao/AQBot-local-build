@@ -33,6 +33,7 @@ pub struct BackupZipContents {
     pub db_path: std::path::PathBuf,
     pub metadata: serde_json::Value,
     pub has_documents: bool,
+    pub has_workspace: bool,
     pub master_key_path: Option<std::path::PathBuf>,
 }
 
@@ -278,6 +279,7 @@ impl WebDavClient {
 pub fn create_backup_zip(
     db_path: &Path,
     documents_dir: Option<&Path>,
+    workspace_dir: Option<&Path>,
     master_key_path: Option<&Path>,
     dest_zip: &Path,
     app_version: &str,
@@ -308,6 +310,7 @@ pub fn create_backup_zip(
         "hostname": get_hostname(),
         "db_checksum": db_checksum,
         "include_documents": documents_dir.is_some(),
+        "include_workspace": workspace_dir.is_some(),
         "object_counts": object_counts_json,
     });
     let metadata_json = serde_json::to_string_pretty(&metadata)
@@ -337,6 +340,13 @@ pub fn create_backup_zip(
         }
     }
 
+    // Optional: workspace/ directory
+    if let Some(ws_dir) = workspace_dir {
+        if ws_dir.exists() {
+            add_directory_to_zip(&mut zip, ws_dir, "workspace", options)?;
+        }
+    }
+
     zip.finish()
         .map_err(|e| AQBotError::Gateway(format!("ZIP finalize error: {}", e)))?;
     Ok(())
@@ -355,6 +365,7 @@ pub fn extract_backup_zip(zip_path: &Path, dest_dir: &Path) -> Result<BackupZipC
     let mut db_path = None;
     let mut metadata = None;
     let mut has_documents = false;
+    let mut has_workspace = false;
     let mut master_key_path = None;
 
     for i in 0..archive.len() {
@@ -400,6 +411,16 @@ pub fn extract_backup_zip(zip_path: &Path, dest_dir: &Path) -> Result<BackupZipC
                 .map_err(|e| AQBotError::Gateway(format!("Failed to extract file: {}", e)))?;
             std::io::copy(&mut entry, &mut outfile)
                 .map_err(|e| AQBotError::Gateway(format!("Failed to extract file: {}", e)))?;
+        } else if name.starts_with("workspace/") && !entry.is_dir() {
+            has_workspace = true;
+            let path = dest_dir.join(&name);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).ok();
+            }
+            let mut outfile = std::fs::File::create(&path)
+                .map_err(|e| AQBotError::Gateway(format!("Failed to extract file: {}", e)))?;
+            std::io::copy(&mut entry, &mut outfile)
+                .map_err(|e| AQBotError::Gateway(format!("Failed to extract file: {}", e)))?;
         }
     }
 
@@ -408,6 +429,7 @@ pub fn extract_backup_zip(zip_path: &Path, dest_dir: &Path) -> Result<BackupZipC
         metadata: metadata
             .ok_or_else(|| AQBotError::Gateway("No metadata.json in backup ZIP".into()))?,
         has_documents,
+        has_workspace,
         master_key_path,
     })
 }

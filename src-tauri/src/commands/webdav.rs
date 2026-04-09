@@ -196,6 +196,16 @@ pub async fn webdav_restore(
         }
     }
 
+    // 7b. Restore workspace if present
+    if contents.has_workspace {
+        let ws_source = temp_dir.join("workspace");
+        let ws_target = state.app_data_dir.join("workspace");
+        if ws_source.exists() {
+            copy_directory(&ws_source, &ws_target)
+                .map_err(|e| format!("Failed to restore workspace: {}", e))?;
+        }
+    }
+
     // 8. Auto-restart to pick up the restored database
     app.restart();
 
@@ -353,6 +363,14 @@ async fn do_webdav_backup_once(
         None
     };
 
+    // 4b. Workspace directory (always included if present)
+    let workspace_root = app_data_dir.join("workspace");
+    let workspace_dir = if workspace_root.exists() {
+        Some(workspace_root)
+    } else {
+        None
+    };
+
     // 5. Create ZIP (includes master.key for cross-device restore)
     let master_key_path = app_data_dir.join("master.key");
     let zip_filename = webdav::generate_backup_filename();
@@ -360,6 +378,7 @@ async fn do_webdav_backup_once(
     webdav::create_backup_zip(
         &temp_db_path,
         documents_dir.as_deref(),
+        workspace_dir.as_deref(),
         Some(&master_key_path),
         &zip_path,
         env!("CARGO_PKG_VERSION"),
