@@ -3,7 +3,7 @@ use aqbot_core::types::*;
 use async_trait::async_trait;
 use futures::Stream;
 use futures::StreamExt;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::pin::Pin;
 
 use crate::{build_http_client, resolve_chat_url, ProviderAdapter, ProviderRequestContext};
@@ -92,6 +92,7 @@ struct OpenAIMessage {
 struct OpenAIResponse {
     id: Option<String>,
     model: Option<String>,
+    #[serde(default)]
     choices: Vec<OpenAIChoice>,
     usage: Option<OpenAIUsage>,
 }
@@ -104,24 +105,35 @@ struct OpenAIChoice {
 
 #[derive(Deserialize)]
 struct OpenAIMessageResp {
+    #[serde(default, deserialize_with = "deserialize_optional_text")]
     content: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_text")]
     reasoning_content: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_text")]
     reasoning: Option<String>,
     reasoning_details: Option<Vec<ReasoningDetail>>,
     tool_calls: Option<Vec<OpenAIToolCallDelta>>,
+    #[serde(flatten)]
+    extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize)]
 struct OpenAIDelta {
+    #[serde(default, deserialize_with = "deserialize_optional_text")]
     content: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_text")]
     reasoning_content: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_text")]
     reasoning: Option<String>,
     reasoning_details: Option<Vec<ReasoningDetail>>,
     tool_calls: Option<Vec<OpenAIToolCallDelta>>,
+    #[serde(flatten)]
+    extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize)]
 struct ReasoningDetail {
+    #[serde(default, deserialize_with = "deserialize_optional_text")]
     text: Option<String>,
 }
 
@@ -144,10 +156,123 @@ fn extract_thinking(
         .and_then(|d| d.text.clone())
 }
 
+fn deserialize_optional_text<'de, D>(deserializer: D) -> std::result::Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|raw| extract_text_from_json(&raw)))
+}
+
+fn deserialize_optional_json_string<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.map(|raw| match raw {
+        serde_json::Value::String(text) => text,
+        other => other.to_string(),
+    }))
+}
+
+fn extract_text_from_json(value: &serde_json::Value) -> Option<String> {
+    fn collect_text(value: &serde_json::Value, out: &mut String) {
+        match value {
+            serde_json::Value::String(text) => out.push_str(text),
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    collect_text(item, out);
+                }
+            }
+            serde_json::Value::Object(map) => {
+                for key in ["text", "content", "delta", "parts", "part", "value", "output_text"] {
+                    if let Some(child) = map.get(key) {
+                        let before = out.len();
+                        collect_text(child, out);
+                        if out.len() > before {
+                            return;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut text = String::new();
+    collect_text(value, &mut text);
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
+fn extract_primary_content(
+    content: &Option<String>,
+    extra: &std::collections::BTreeMap<String, serde_json::Value>,
+) -> Option<String> {
+    if content.is_some() {
+        return content.clone();
+    }
+
+    for key in ["text", "part", "parts", "value", "output_text"] {
+        if let Some(value) = extra.get(key) {
+            if let Some(text) = extract_text_from_json(value) {
+                return Some(text);
+            }
+        }
+    }
+
+    None
+}
+
+fn extract_gemini_compat_chunk(data: &str) -> Option<ChatStreamChunk> {
+    let parsed = serde_json::from_str::<GeminiCompatChunk>(data).ok()?;
+    let content = parsed
+        .candidates
+        .as_ref()
+        .and_then(|candidates| candidates.first())
+        .and_then(|candidate| candidate.content.as_ref())
+        .map(|content| {
+            content
+                .parts
+                .iter()
+                .filter_map(|part| part.text.as_ref())
+                .cloned()
+                .collect::<String>()
+        })
+        .filter(|text| !text.is_empty());
+
+    let usage = parsed.usage_metadata.map(|usage| TokenUsage {
+        prompt_tokens: usage.prompt_token_count.unwrap_or(0),
+        completion_tokens: usage.candidates_token_count.unwrap_or(0),
+        total_tokens: usage.total_token_count.unwrap_or(0),
+    });
+
+    if content.is_none() && usage.is_none() {
+        return None;
+    }
+
+    Some(ChatStreamChunk {
+        content,
+        thinking: None,
+        done: false,
+        is_final: None,
+        usage,
+        tool_calls: None,
+    })
+}
+
 #[derive(Deserialize)]
 struct OpenAIUsage {
+    #[serde(default)]
     prompt_tokens: u32,
+    #[serde(default)]
     completion_tokens: u32,
+    #[serde(default)]
     total_tokens: u32,
 }
 
@@ -163,6 +288,7 @@ struct OpenAIToolCallDelta {
 #[derive(Deserialize, Debug, Clone)]
 struct OpenAIToolCallFunctionDelta {
     name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_json_string")]
     arguments: Option<String>,
 }
 
@@ -180,6 +306,37 @@ struct WrappedModelsResponse {
 #[derive(Deserialize)]
 struct OpenAIModel {
     id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiCompatChunk {
+    candidates: Option<Vec<GeminiCompatCandidate>>,
+    usage_metadata: Option<GeminiCompatUsageMetadata>,
+}
+
+#[derive(Deserialize)]
+struct GeminiCompatCandidate {
+    content: Option<GeminiCompatContent>,
+}
+
+#[derive(Deserialize)]
+struct GeminiCompatContent {
+    parts: Vec<GeminiCompatPart>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiCompatPart {
+    text: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiCompatUsageMetadata {
+    prompt_token_count: Option<u32>,
+    candidates_token_count: Option<u32>,
+    total_token_count: Option<u32>,
 }
 
 // --- Embedding types ---
@@ -492,7 +649,7 @@ impl ProviderAdapter for OpenAIAdapter {
         Ok(ChatResponse {
             id: oai.id.unwrap_or_default(),
             model: oai.model.unwrap_or_else(|| request.model.clone()),
-            content: msg.content.clone().unwrap_or_default(),
+            content: extract_primary_content(&msg.content, &msg.extra).unwrap_or_default(),
             thinking: extract_thinking(&msg.reasoning_content, &msg.reasoning, &msg.reasoning_details),
             usage,
             tool_calls,
@@ -542,120 +699,181 @@ impl ProviderAdapter for OpenAIAdapter {
             let mut byte_stream = resp.bytes_stream();
             let mut buf = String::new();
             let mut pending_tool_calls: Vec<(String, String, String, String)> = Vec::new();
+            let mut event_data_lines: Vec<String> = Vec::new();
             // (id, type, name, arguments) — indexed by position
+
+            let mut process_event = |data: &str| -> bool {
+                if data.trim() == "[DONE]" {
+                    let tool_calls = if pending_tool_calls.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            pending_tool_calls
+                                .iter()
+                                .map(|(id, ct, name, args)| aqbot_core::types::ToolCall {
+                                    id: id.clone(),
+                                    call_type: ct.clone(),
+                                    function: aqbot_core::types::ToolCallFunction {
+                                        name: name.clone(),
+                                        arguments: args.clone(),
+                                    },
+                                })
+                                .collect(),
+                        )
+                    };
+                    let _ = tx.unbounded_send(Ok(ChatStreamChunk {
+                        content: None,
+                        thinking: None,
+                        done: true,
+                        is_final: None,
+                        usage: None,
+                        tool_calls,
+                    }));
+                    return true;
+                }
+
+                let parsed = match serde_json::from_str::<OpenAIResponse>(data) {
+                    Ok(value) => value,
+                    Err(_) => return false,
+                };
+
+                if let Some(choice) = parsed.choices.first() {
+                    let tool_call_deltas = choice
+                        .delta
+                        .as_ref()
+                        .and_then(|delta| delta.tool_calls.as_ref())
+                        .or_else(|| {
+                            choice
+                                .message
+                                .as_ref()
+                                .and_then(|message| message.tool_calls.as_ref())
+                        });
+                    if let Some(tc_deltas) = tool_call_deltas {
+                        for tc in tc_deltas {
+                            let idx = tc.index;
+                            while pending_tool_calls.len() <= idx {
+                                pending_tool_calls.push((
+                                    String::new(),
+                                    String::from("function"),
+                                    String::new(),
+                                    String::new(),
+                                ));
+                            }
+                            if let Some(ref id) = tc.id {
+                                pending_tool_calls[idx].0 = id.clone();
+                            }
+                            if let Some(ref ct) = tc.call_type {
+                                pending_tool_calls[idx].1 = ct.clone();
+                            }
+                            if let Some(ref f) = tc.function {
+                                if let Some(ref name) = f.name {
+                                    pending_tool_calls[idx].2 = name.clone();
+                                }
+                                if let Some(ref args) = f.arguments {
+                                    pending_tool_calls[idx].3.push_str(args);
+                                }
+                            }
+                        }
+                    }
+
+                    let usage = parsed.usage.map(|u| TokenUsage {
+                        prompt_tokens: u.prompt_tokens,
+                        completion_tokens: u.completion_tokens,
+                        total_tokens: u.total_tokens,
+                    });
+                    let content = choice
+                        .delta
+                        .as_ref()
+                        .and_then(|delta| extract_primary_content(&delta.content, &delta.extra))
+                        .or_else(|| {
+                            choice
+                                .message
+                                .as_ref()
+                                .and_then(|message| extract_primary_content(&message.content, &message.extra))
+                        });
+                    let thinking = choice
+                        .delta
+                        .as_ref()
+                        .and_then(|delta| {
+                            extract_thinking(
+                                &delta.reasoning_content,
+                                &delta.reasoning,
+                                &delta.reasoning_details,
+                            )
+                        })
+                        .or_else(|| {
+                            choice.message.as_ref().and_then(|message| {
+                                extract_thinking(
+                                    &message.reasoning_content,
+                                    &message.reasoning,
+                                    &message.reasoning_details,
+                                )
+                            })
+                        });
+
+                    if content.is_some() || thinking.is_some() || usage.is_some() {
+                        let _ = tx.unbounded_send(Ok(ChatStreamChunk {
+                            content,
+                            thinking,
+                            done: false,
+                            is_final: None,
+                            usage,
+                            tool_calls: None,
+                        }));
+                    }
+                    return false;
+                }
+
+                if let Some(u) = parsed.usage {
+                    let _ = tx.unbounded_send(Ok(ChatStreamChunk {
+                        content: None,
+                        thinking: None,
+                        done: false,
+                        is_final: None,
+                        usage: Some(TokenUsage {
+                            prompt_tokens: u.prompt_tokens,
+                            completion_tokens: u.completion_tokens,
+                            total_tokens: u.total_tokens,
+                        }),
+                        tool_calls: None,
+                    }));
+                }
+
+                if let Some(chunk) = extract_gemini_compat_chunk(data) {
+                    let _ = tx.unbounded_send(Ok(chunk));
+                }
+
+                false
+            };
 
             while let Some(chunk) = byte_stream.next().await {
                 match chunk {
                     Ok(bytes) => {
                         buf.push_str(&String::from_utf8_lossy(&bytes));
                         while let Some(pos) = buf.find('\n') {
-                            let line = buf[..pos].trim_end().to_string();
+                            let line = buf[..pos].trim_end_matches('\r').to_string();
                             buf = buf[pos + 1..].to_string();
 
-                            if line.is_empty() || line.starts_with(':') {
-                                continue;
-                            }
-
-                            let data = if let Some(d) = line.strip_prefix("data: ") {
-                                d
-                            } else if let Some(d) = line.strip_prefix("data:") {
-                                d
-                            } else {
-                                continue;
-                            };
-
-                            if data.trim() == "[DONE]" {
-                                let tool_calls = if pending_tool_calls.is_empty() {
-                                    None
-                                } else {
-                                    Some(
-                                        pending_tool_calls
-                                            .iter()
-                                            .map(|(id, ct, name, args)| {
-                                                aqbot_core::types::ToolCall {
-                                                    id: id.clone(),
-                                                    call_type: ct.clone(),
-                                                    function: aqbot_core::types::ToolCallFunction {
-                                                        name: name.clone(),
-                                                        arguments: args.clone(),
-                                                    },
-                                                }
-                                            })
-                                            .collect(),
-                                    )
-                                };
-                                let _ = tx.unbounded_send(Ok(ChatStreamChunk {
-                                    content: None,
-                                    thinking: None,
-                                    done: true,
-                                    is_final: None,
-                                    usage: None,
-                                    tool_calls,
-                                }));
-                                return;
-                            }
-
-                            if let Ok(parsed) = serde_json::from_str::<OpenAIResponse>(data) {
-                                if let Some(choice) = parsed.choices.first() {
-                                    if let Some(delta) = &choice.delta {
-                                        // Handle tool call deltas
-                                        if let Some(ref tc_deltas) = delta.tool_calls {
-                                            for tc in tc_deltas {
-                                                let idx = tc.index;
-                                                while pending_tool_calls.len() <= idx {
-                                                    pending_tool_calls.push((
-                                                        String::new(),
-                                                        String::from("function"),
-                                                        String::new(),
-                                                        String::new(),
-                                                    ));
-                                                }
-                                                if let Some(ref id) = tc.id {
-                                                    pending_tool_calls[idx].0 = id.clone();
-                                                }
-                                                if let Some(ref ct) = tc.call_type {
-                                                    pending_tool_calls[idx].1 = ct.clone();
-                                                }
-                                                if let Some(ref f) = tc.function {
-                                                    if let Some(ref name) = f.name {
-                                                        pending_tool_calls[idx].2 = name.clone();
-                                                    }
-                                                    if let Some(ref args) = f.arguments {
-                                                        pending_tool_calls[idx].3.push_str(args);
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        let usage = parsed.usage.map(|u| TokenUsage {
-                                            prompt_tokens: u.prompt_tokens,
-                                            completion_tokens: u.completion_tokens,
-                                            total_tokens: u.total_tokens,
-                                        });
-                                        let _ = tx.unbounded_send(Ok(ChatStreamChunk {
-                                            content: delta.content.clone(),
-                                            thinking: extract_thinking(&delta.reasoning_content, &delta.reasoning, &delta.reasoning_details),
-                                            done: false,
-                                            is_final: None,
-                                            usage,
-                                            tool_calls: None,
-                                        }));
-                                    }
-                                } else if let Some(u) = parsed.usage {
-                                    // Usage-only chunk (empty choices) sent when stream_options.include_usage is true
-                                    let _ = tx.unbounded_send(Ok(ChatStreamChunk {
-                                        content: None,
-                                        thinking: None,
-                                        done: false,
-                                        is_final: None,
-                                        usage: Some(TokenUsage {
-                                            prompt_tokens: u.prompt_tokens,
-                                            completion_tokens: u.completion_tokens,
-                                            total_tokens: u.total_tokens,
-                                        }),
-                                        tool_calls: None,
-                                    }));
+                            if line.is_empty() {
+                                if event_data_lines.is_empty() {
+                                    continue;
                                 }
+                                let data = event_data_lines.join("\n");
+                                event_data_lines.clear();
+                                if process_event(&data) {
+                                    return;
+                                }
+                                continue;
+                            }
+
+                            if line.starts_with(':') {
+                                continue;
+                            }
+
+                            if let Some(d) = line.strip_prefix("data: ") {
+                                event_data_lines.push(d.to_string());
+                            } else if let Some(d) = line.strip_prefix("data:") {
+                                event_data_lines.push(d.to_string());
                             }
                         }
                     }
@@ -665,6 +883,20 @@ impl ProviderAdapter for OpenAIAdapter {
                         ))));
                         return;
                     }
+                }
+            }
+
+            let trailing_line = buf.trim_end_matches('\r');
+            if let Some(d) = trailing_line.strip_prefix("data: ") {
+                event_data_lines.push(d.to_string());
+            } else if let Some(d) = trailing_line.strip_prefix("data:") {
+                event_data_lines.push(d.to_string());
+            }
+
+            if !event_data_lines.is_empty() {
+                let data = event_data_lines.join("\n");
+                if process_event(&data) {
+                    return;
                 }
             }
 

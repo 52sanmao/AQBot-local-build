@@ -156,8 +156,21 @@ function mergePreservedMessages(
   const merged = new Map(pageMessages.map((message) => [message.id, message]));
   for (const messageId of preserveMessageIds) {
     const localMessage = currentMessages.find((message) => message.id === messageId);
-    if (localMessage && !merged.has(messageId)) {
-      merged.set(messageId, localMessage);
+    if (localMessage) {
+      const dbMessage = merged.get(messageId);
+      if (dbMessage) {
+        // For just-completed streams, local content is authoritative:
+        // the DB save may not have finished within the fetchMessages delay,
+        // so the DB row may still hold the empty placeholder content.
+        // Keep local content + status but merge in DB metadata (token counts, etc.)
+        merged.set(messageId, {
+          ...dbMessage,
+          content: localMessage.content,
+          status: localMessage.status,
+        });
+      } else {
+        merged.set(messageId, localMessage);
+      }
     }
   }
 
@@ -365,6 +378,7 @@ function appendStreamChunk(
   modelId?: string,
   providerId?: string,
 ) {
+
   // Accumulate into stream buffer only in single-stream mode
   // (parallel multi-model streams would corrupt the shared buffer)
   if (!_isMultiModelActive) {
