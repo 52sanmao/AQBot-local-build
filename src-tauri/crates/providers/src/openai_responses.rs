@@ -91,8 +91,11 @@ struct ResponsesResponse {
 
 #[derive(Deserialize)]
 struct ResponsesUsage {
+    #[serde(default)]
     input_tokens: u32,
+    #[serde(default)]
     output_tokens: u32,
+    #[serde(default)]
     total_tokens: u32,
 }
 
