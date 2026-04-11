@@ -1325,7 +1325,81 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     let unlistenStreamThinking: UnlistenFn | null = null;
     let unlistenMessageId: UnlistenFn | null = null;
 
+    // ── Agent stream buffering (same pattern as Q&A _pendingUiChunk) ──
+    let _agentPendingText = '';
+    let _agentPendingThinking = '';
+    let _agentFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushAgentStreamChunks = () => {
+      if (_agentFlushTimer !== null) {
+        clearTimeout(_agentFlushTimer);
+        _agentFlushTimer = null;
+      }
+      const textChunk = _agentPendingText;
+      const thinkingChunk = _agentPendingThinking;
+      _agentPendingText = '';
+      _agentPendingThinking = '';
+      if (!textChunk && !thinkingChunk) return;
+
+      set((s) => {
+        const wasThinking = s.thinkingActiveMessageIds.has(currentMsgId);
+        let nextThinkingIds = s.thinkingActiveMessageIds;
+
+        const updatedMessages = s.messages.map((m) => {
+          if (m.id !== currentMsgId) return m;
+
+          let content = m.content || '';
+          let thinking = m.thinking || '';
+
+          // 1. Process buffered thinking chunks first
+          if (thinkingChunk) {
+            if (!wasThinking) {
+              content += '<think data-aqbot="1">\n';
+            }
+            content += thinkingChunk;
+            thinking += thinkingChunk;
+            nextThinkingIds = new Set([...nextThinkingIds, currentMsgId]);
+          }
+
+          // 2. Process buffered text chunks (closes thinking block if needed)
+          if (textChunk) {
+            const isCurrentlyThinking = thinkingChunk ? true : wasThinking;
+            if (isCurrentlyThinking) {
+              content += '\n</think>\n\n';
+              const n = new Set(nextThinkingIds);
+              n.delete(currentMsgId);
+              nextThinkingIds = n;
+            }
+            content += textChunk;
+          }
+
+          return { ...m, content, thinking };
+        });
+
+        return {
+          thinkingActiveMessageIds: nextThinkingIds,
+          messages: updatedMessages,
+        };
+      });
+    };
+
+    const scheduleAgentFlush = () => {
+      if (_agentFlushTimer === null) {
+        _agentFlushTimer = setTimeout(flushAgentStreamChunks, STREAM_UI_FLUSH_INTERVAL_MS);
+      }
+    };
+
+    const clearAgentStreamBuffer = () => {
+      if (_agentFlushTimer !== null) {
+        clearTimeout(_agentFlushTimer);
+        _agentFlushTimer = null;
+      }
+      _agentPendingText = '';
+      _agentPendingThinking = '';
+    };
+
     const cleanup = () => {
+      clearAgentStreamBuffer();
       unlistenStreamText?.();
       unlistenStreamThinking?.();
       unlistenDone?.();
@@ -1344,6 +1418,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         // This replaces the temp ID so tool call events can be matched
         listen<{ conversationId: string; assistantMessageId: string }>('agent-message-id', (event) => {
           if (event.payload.conversationId !== conversationId) return;
+          // Flush pending buffer before switching IDs
+          flushAgentStreamChunks();
           const realId = event.payload.assistantMessageId;
           const oldId = currentMsgId;
           currentMsgId = realId;
@@ -1355,60 +1431,25 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           }));
         }).then((fn) => { unlistenMessageId = fn; });
 
-        // Listen for incremental text chunks
+        // Listen for incremental text chunks — buffer and flush periodically
         listen<AgentStreamTextEvent>('agent-stream-text', (event) => {
           if (event.payload.conversationId !== conversationId) return;
-
-          set((s) => {
-            const wasThinking = s.thinkingActiveMessageIds.has(currentMsgId);
-            const nextThinkingIds = wasThinking
-              ? (() => { const n = new Set(s.thinkingActiveMessageIds); n.delete(currentMsgId); return n; })()
-              : s.thinkingActiveMessageIds;
-
-            return {
-              thinkingActiveMessageIds: nextThinkingIds,
-              messages: s.messages.map((m) => {
-                if (m.id === currentMsgId) {
-                  let content = m.content || '';
-                  // Close the <think> block when text content starts arriving
-                  if (wasThinking) {
-                    content += '\n</think>\n\n';
-                  }
-                  content += event.payload.text;
-                  return { ...m, content };
-                }
-                return m;
-              }),
-            };
-          });
+          _agentPendingText += event.payload.text;
+          scheduleAgentFlush();
         }).then((fn) => { unlistenStreamText = fn; });
 
-        // Listen for incremental thinking chunks — embed in content with <think> tags
+        // Listen for incremental thinking chunks — buffer and flush periodically
         listen<AgentStreamThinkingEvent>('agent-stream-thinking', (event) => {
           if (event.payload.conversationId !== conversationId) return;
-
-          set((s) => {
-            const wasThinking = s.thinkingActiveMessageIds.has(currentMsgId);
-            return {
-              thinkingActiveMessageIds: new Set([...s.thinkingActiveMessageIds, currentMsgId]),
-              messages: s.messages.map((m) => {
-                if (m.id === currentMsgId) {
-                  let content = m.content || '';
-                  if (!wasThinking) {
-                    content += '<think data-aqbot="1">\n';
-                  }
-                  content += event.payload.thinking;
-                  return { ...m, content, thinking: (m.thinking || '') + event.payload.thinking };
-                }
-                return m;
-              }),
-            };
-          });
+          _agentPendingThinking += event.payload.thinking;
+          scheduleAgentFlush();
         }).then((fn) => { unlistenStreamThinking = fn; });
 
         // Listen for agent-done — correction overwrite with final content
         listen<AgentDoneEvent>('agent-done', (event) => {
           if (event.payload.conversationId !== conversationId) return;
+          // Clear pending buffer (done event overwrites with final content)
+          clearAgentStreamBuffer();
           // Skip if streaming was already cancelled (avoid stale fetchMessages re-render)
           const isStillStreaming = get().streaming && get().streamingMessageId === currentMsgId;
           if (!isStillStreaming) {
@@ -1450,6 +1491,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         // Listen for agent-error
         listen<AgentErrorEvent>('agent-error', (event) => {
           if (event.payload.conversationId !== conversationId) return;
+          // Clear pending buffer (error event overwrites content)
+          clearAgentStreamBuffer();
           // Skip if streaming was already cancelled
           const isStillStreaming = get().streaming && get().streamingMessageId === currentMsgId;
           if (!isStillStreaming) {
