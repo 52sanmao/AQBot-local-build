@@ -5,7 +5,7 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderConfig>, String> {
-    aqbot_core::repo::provider::list_providers(&state.sea_db)
+    aqbot_core::repo::provider::list_providers_merged(&state.sea_db)
         .await
         .map_err(|e| e.to_string())
 }
@@ -26,13 +26,20 @@ pub async fn update_provider(
     id: String,
     input: UpdateProviderInput,
 ) -> Result<ProviderConfig, String> {
-    aqbot_core::repo::provider::update_provider(&state.sea_db, &id, input)
+    let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &id)
+        .await
+        .map_err(|e| e.to_string())?;
+    aqbot_core::repo::provider::update_provider(&state.sea_db, &real_id, input)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn delete_provider(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    // Virtual built-in providers have no DB row — deletion is a no-op (they'll reappear)
+    if id.starts_with("builtin_") {
+        return Ok(());
+    }
     aqbot_core::repo::provider::delete_provider(&state.sea_db, &id)
         .await
         .map_err(|e| e.to_string())
@@ -44,7 +51,10 @@ pub async fn toggle_provider(
     id: String,
     enabled: bool,
 ) -> Result<(), String> {
-    aqbot_core::repo::provider::toggle_provider(&state.sea_db, &id, enabled)
+    let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &id)
+        .await
+        .map_err(|e| e.to_string())?;
+    aqbot_core::repo::provider::toggle_provider(&state.sea_db, &real_id, enabled)
         .await
         .map_err(|e| e.to_string())
 }
@@ -55,6 +65,9 @@ pub async fn add_provider_key(
     provider_id: String,
     raw_key: String,
 ) -> Result<ProviderKey, String> {
+    let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &provider_id)
+        .await
+        .map_err(|e| e.to_string())?;
     let encrypted =
         aqbot_core::crypto::encrypt_key(&raw_key, &state.master_key).map_err(|e| e.to_string())?;
     let prefix = if raw_key.len() >= 8 {
@@ -62,7 +75,7 @@ pub async fn add_provider_key(
     } else {
         raw_key.clone()
     };
-    aqbot_core::repo::provider::add_provider_key(&state.sea_db, &provider_id, &encrypted, &prefix)
+    aqbot_core::repo::provider::add_provider_key(&state.sea_db, &real_id, &encrypted, &prefix)
         .await
         .map_err(|e| e.to_string())
 }
@@ -161,7 +174,10 @@ pub async fn save_models(
     provider_id: String,
     models: Vec<Model>,
 ) -> Result<(), String> {
-    aqbot_core::repo::provider::save_models(&state.sea_db, &provider_id, &models)
+    let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &provider_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    aqbot_core::repo::provider::save_models(&state.sea_db, &real_id, &models)
         .await
         .map_err(|e| e.to_string())
 }
@@ -173,7 +189,10 @@ pub async fn toggle_model(
     model_id: String,
     enabled: bool,
 ) -> Result<Model, String> {
-    aqbot_core::repo::provider::toggle_model(&state.sea_db, &provider_id, &model_id, enabled)
+    let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &provider_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    aqbot_core::repo::provider::toggle_model(&state.sea_db, &real_id, &model_id, enabled)
         .await
         .map_err(|e| e.to_string())
 }
@@ -185,9 +204,12 @@ pub async fn update_model_params(
     model_id: String,
     overrides: ModelParamOverrides,
 ) -> Result<Model, String> {
+    let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &provider_id)
+        .await
+        .map_err(|e| e.to_string())?;
     aqbot_core::repo::provider::update_model_params(
         &state.sea_db,
-        &provider_id,
+        &real_id,
         &model_id,
         overrides,
     )
@@ -200,11 +222,14 @@ pub async fn fetch_remote_models(
     state: State<'_, AppState>,
     provider_id: String,
 ) -> Result<Vec<Model>, String> {
-    let provider = aqbot_core::repo::provider::get_provider(&state.sea_db, &provider_id)
+    let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &provider_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let provider = aqbot_core::repo::provider::get_provider(&state.sea_db, &real_id)
         .await
         .map_err(|e| e.to_string())?;
     // Get an enabled key for the provider
-    let key_row = aqbot_core::repo::provider::get_active_key(&state.sea_db, &provider_id)
+    let key_row = aqbot_core::repo::provider::get_active_key(&state.sea_db, &real_id)
         .await
         .map_err(|e| e.to_string())?;
     let decrypted = aqbot_core::crypto::decrypt_key(&key_row.key_encrypted, &state.master_key)
@@ -248,10 +273,13 @@ pub async fn test_model(
     provider_id: String,
     model_id: String,
 ) -> Result<u64, String> {
-    let provider = aqbot_core::repo::provider::get_provider(&state.sea_db, &provider_id)
+    let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &provider_id)
         .await
         .map_err(|e| e.to_string())?;
-    let key_row = aqbot_core::repo::provider::get_active_key(&state.sea_db, &provider_id)
+    let provider = aqbot_core::repo::provider::get_provider(&state.sea_db, &real_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let key_row = aqbot_core::repo::provider::get_active_key(&state.sea_db, &real_id)
         .await
         .map_err(|e| e.to_string())?;
     let decrypted = aqbot_core::crypto::decrypt_key(&key_row.key_encrypted, &state.master_key)
@@ -314,133 +342,16 @@ pub async fn reorder_providers(
     state: State<'_, AppState>,
     provider_ids: Vec<String>,
 ) -> Result<(), String> {
-    aqbot_core::repo::provider::reorder_providers(&state.sea_db, &provider_ids)
+    // Materialize any virtual built-in providers so sort_order can be persisted
+    let mut real_ids = Vec::with_capacity(provider_ids.len());
+    for id in &provider_ids {
+        let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, id)
+            .await
+            .map_err(|e| e.to_string())?;
+        real_ids.push(real_id);
+    }
+    aqbot_core::repo::provider::reorder_providers(&state.sea_db, &real_ids)
         .await
         .map_err(|e| e.to_string())
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct InitializeResult {
-    pub added: Vec<String>,
-    pub updated: Vec<String>,
-    pub skipped: Vec<String>,
-}
-
-#[tauri::command]
-pub async fn initialize_providers(
-    state: State<'_, AppState>,
-    overwrite: bool,
-) -> Result<InitializeResult, String> {
-    let existing = aqbot_core::repo::provider::list_providers(&state.sea_db)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let builtins = aqbot_core::db::get_builtin_providers();
-    let max_sort = existing.iter().map(|p| p.sort_order).max().unwrap_or(-1);
-
-    let mut added = Vec::new();
-    let mut updated = Vec::new();
-    let mut skipped = Vec::new();
-
-    for (i, bp) in builtins.into_iter().enumerate() {
-        let matched = existing.iter().find(|p| p.name == bp.name);
-
-        if let Some(ex) = matched {
-            if overwrite {
-                aqbot_core::repo::provider::update_provider(
-                    &state.sea_db,
-                    &ex.id,
-                    aqbot_core::types::UpdateProviderInput {
-                        name: Some(bp.name.to_string()),
-                        provider_type: Some(bp.provider_type.clone()),
-                        api_host: Some(bp.api_host.to_string()),
-                        api_path: Some(None),
-                        ..Default::default()
-                    },
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-
-                let models: Vec<aqbot_core::types::Model> = bp
-                    .models
-                    .into_iter()
-                    .map(
-                        |(model_id, name, caps, max_tokens)| aqbot_core::types::Model {
-                            provider_id: ex.id.clone(),
-                            model_id: model_id.to_string(),
-                            name: name.to_string(),
-                            group_name: None,
-                            model_type: aqbot_core::types::ModelType::detect(model_id),
-                            capabilities: caps,
-                            max_tokens,
-                            enabled: true,
-                            param_overrides: None,
-                        },
-                    )
-                    .collect();
-
-                aqbot_core::repo::provider::save_models(&state.sea_db, &ex.id, &models)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                updated.push(bp.name.to_string());
-            } else {
-                skipped.push(bp.name.to_string());
-            }
-        } else {
-            let prov = aqbot_core::repo::provider::create_provider(
-                &state.sea_db,
-                aqbot_core::types::CreateProviderInput {
-                    name: bp.name.to_string(),
-                    provider_type: bp.provider_type,
-                    api_host: bp.api_host.to_string(),
-                    api_path: None,
-                    enabled: true,
-                },
-            )
-            .await
-            .map_err(|e| e.to_string())?;
-
-            let models: Vec<aqbot_core::types::Model> = bp
-                .models
-                .into_iter()
-                .map(
-                    |(model_id, name, caps, max_tokens)| aqbot_core::types::Model {
-                        provider_id: prov.id.clone(),
-                        model_id: model_id.to_string(),
-                        name: name.to_string(),
-                        group_name: None,
-                        model_type: aqbot_core::types::ModelType::detect(model_id),
-                        capabilities: caps,
-                        max_tokens,
-                        enabled: true,
-                        param_overrides: None,
-                    },
-                )
-                .collect();
-
-            aqbot_core::repo::provider::save_models(&state.sea_db, &prov.id, &models)
-                .await
-                .map_err(|e| e.to_string())?;
-
-            aqbot_core::repo::provider::update_provider(
-                &state.sea_db,
-                &prov.id,
-                aqbot_core::types::UpdateProviderInput {
-                    sort_order: Some(max_sort + 1 + i as i32),
-                    ..Default::default()
-                },
-            )
-            .await
-            .map_err(|e| e.to_string())?;
-
-            added.push(bp.name.to_string());
-        }
-    }
-
-    Ok(InitializeResult {
-        added,
-        updated,
-        skipped,
-    })
-}

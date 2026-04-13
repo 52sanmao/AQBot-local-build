@@ -85,12 +85,18 @@ export const useProviderStore = create<ProviderState>((set) => ({
   toggleProvider: async (id, enabled) => {
     try {
       await invoke('toggle_provider', { id, enabled });
-      set((s) => ({
-        providers: s.providers.map((p) =>
-          p.id === id ? { ...p, enabled } : p,
-        ),
-        error: null,
-      }));
+      if (id.startsWith('builtin_')) {
+        // Virtual provider was materialized — refetch to get real ID
+        const providers = await invoke<ProviderConfig[]>('list_providers');
+        set({ providers, error: null });
+      } else {
+        set((s) => ({
+          providers: s.providers.map((p) =>
+            p.id === id ? { ...p, enabled } : p,
+          ),
+          error: null,
+        }));
+      }
     } catch (e) {
       set({ error: String(e) });
       throw e;
@@ -98,16 +104,23 @@ export const useProviderStore = create<ProviderState>((set) => ({
   },
 
   reorderProviders: async (providerIds) => {
+    const hasVirtual = providerIds.some((id) => id.startsWith('builtin_'));
     await invoke('reorder_providers', { providerIds });
-    set((s) => {
-      const ordered = providerIds
-        .map((id, i) => {
-          const p = s.providers.find((p) => p.id === id);
-          return p ? { ...p, sort_order: i } : null;
-        })
-        .filter(Boolean) as ProviderConfig[];
-      return { providers: ordered };
-    });
+    if (hasVirtual) {
+      // Virtual IDs were materialized — refetch to get real IDs
+      const providers = await invoke<ProviderConfig[]>('list_providers');
+      set({ providers });
+    } else {
+      set((s) => {
+        const ordered = providerIds
+          .map((id, i) => {
+            const p = s.providers.find((p) => p.id === id);
+            return p ? { ...p, sort_order: i } : null;
+          })
+          .filter(Boolean) as ProviderConfig[];
+        return { providers: ordered };
+      });
+    }
   },
 
   addProviderKey: async (providerId, rawKey) => {

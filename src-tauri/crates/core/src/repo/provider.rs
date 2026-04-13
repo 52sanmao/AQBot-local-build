@@ -73,6 +73,7 @@ fn provider_from_entity(
         proxy_config: row.proxy_config.and_then(|s| serde_json::from_str(&s).ok()),
         custom_headers: row.custom_headers,
         icon: row.icon,
+        builtin_id: row.builtin_id,
         sort_order: row.sort_order,
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -126,6 +127,7 @@ pub async fn create_provider(
         proxy_config: Set(None),
         custom_headers: Set(None),
         icon: Set(None),
+        builtin_id: Set(input.builtin_id),
         sort_order: Set(0),
         created_at: Set(now),
         updated_at: Set(now),
@@ -482,4 +484,144 @@ pub async fn update_model_params(
     am.update(db).await?;
 
     get_model(db, provider_id, model_id).await
+}
+
+// --- Built-in Provider Merge ---
+
+/// Merge built-in provider definitions with database records.
+/// Built-in providers without a DB row appear as virtual providers (enabled=false, no keys/models).
+/// Built-in providers with a DB row use the DB values (user overrides).
+/// Custom providers (builtin_id=NULL) are appended after built-ins.
+pub async fn list_providers_merged(db: &DatabaseConnection) -> Result<Vec<ProviderConfig>> {
+    let db_providers = list_providers(db).await?;
+    let builtins = crate::db::get_builtin_providers();
+
+    let mut result = Vec::new();
+
+    for bp in &builtins {
+        if let Some(db_prov) = db_providers
+            .iter()
+            .find(|p| p.builtin_id.as_deref() == Some(bp.builtin_id))
+        {
+            result.push(db_prov.clone());
+        } else {
+            let now = now_ts();
+            let default_models: Vec<Model> = bp
+                .models
+                .iter()
+                .map(|(model_id, name, caps, max_tokens)| Model {
+                    provider_id: format!("builtin_{}", bp.builtin_id),
+                    model_id: String::from(*model_id),
+                    name: String::from(*name),
+                    group_name: None,
+                    model_type: ModelType::detect(model_id),
+                    capabilities: caps.clone(),
+                    max_tokens: *max_tokens,
+                    enabled: true,
+                    param_overrides: None,
+                })
+                .collect();
+
+            result.push(ProviderConfig {
+                id: format!("builtin_{}", bp.builtin_id),
+                name: String::from(bp.name),
+                provider_type: bp.provider_type.clone(),
+                api_host: String::from(bp.api_host),
+                api_path: None,
+                enabled: false,
+                models: default_models,
+                keys: vec![],
+                proxy_config: None,
+                custom_headers: None,
+                icon: None,
+                builtin_id: Some(String::from(bp.builtin_id)),
+                sort_order: 0,
+                created_at: now,
+                updated_at: now,
+            });
+        }
+    }
+
+    // Append custom providers (no builtin_id)
+    for p in &db_providers {
+        if p.builtin_id.is_none() {
+            result.push(p.clone());
+        }
+    }
+
+    // Sort: enabled first (by sort_order), then disabled (by sort_order)
+    result.sort_by(|a, b| {
+        b.enabled
+            .cmp(&a.enabled)
+            .then(a.sort_order.cmp(&b.sort_order))
+    });
+
+    Ok(result)
+}
+
+/// Materialize a virtual built-in provider into the database.
+/// Called when a user first modifies a built-in provider that has no DB record.
+/// Returns the new real provider ID.
+pub async fn ensure_builtin_provider(
+    db: &DatabaseConnection,
+    builtin_id: &str,
+) -> Result<String> {
+    let existing = providers::Entity::find()
+        .filter(providers::Column::BuiltinId.eq(builtin_id))
+        .one(db)
+        .await?;
+
+    if let Some(row) = existing {
+        return Ok(row.id);
+    }
+
+    let builtins = crate::db::get_builtin_providers();
+    let bp = builtins
+        .iter()
+        .find(|b| b.builtin_id == builtin_id)
+        .ok_or_else(|| AQBotError::NotFound(format!("Built-in provider {}", builtin_id)))?;
+
+    let prov = create_provider(
+        db,
+        CreateProviderInput {
+            name: String::from(bp.name),
+            provider_type: bp.provider_type.clone(),
+            api_host: String::from(bp.api_host),
+            api_path: None,
+            enabled: false,
+            builtin_id: Some(String::from(builtin_id)),
+        },
+    )
+    .await?;
+
+    let models: Vec<Model> = bp
+        .models
+        .iter()
+        .map(|(model_id, name, caps, max_tokens)| Model {
+            provider_id: prov.id.clone(),
+            model_id: String::from(*model_id),
+            name: String::from(*name),
+            group_name: None,
+            model_type: ModelType::detect(model_id),
+            capabilities: caps.clone(),
+            max_tokens: *max_tokens,
+            enabled: true,
+            param_overrides: None,
+        })
+        .collect();
+
+    save_models(db, &prov.id, &models).await?;
+
+    Ok(prov.id)
+}
+
+/// Resolve a provider ID that might be a virtual builtin ID (e.g., "builtin_openai").
+/// If virtual, materializes the provider into DB and returns the real ID.
+/// If already a real ID, returns it unchanged.
+pub async fn resolve_provider_id(db: &DatabaseConnection, id: &str) -> Result<String> {
+    if let Some(builtin_id) = id.strip_prefix("builtin_") {
+        ensure_builtin_provider(db, builtin_id).await
+    } else {
+        Ok(id.to_string())
+    }
 }

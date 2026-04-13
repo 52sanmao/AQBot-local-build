@@ -13,6 +13,7 @@ export interface ProviderConfig {
   proxy_config: ProviderProxyConfig | null;
   custom_headers: string | null;
   icon: string | null;
+  builtin_id: string | null;
   sort_order: number;
   created_at: number;
   updated_at: number;

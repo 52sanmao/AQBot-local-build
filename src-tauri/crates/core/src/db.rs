@@ -41,14 +41,12 @@ pub async fn create_pool(db_path: &str) -> Result<DbHandle> {
     // Run SeaORM migrations
     aqbot_migration::Migrator::up(&conn, None).await?;
 
-    // Seed built-in providers on first run
-    seed_builtin_providers(&conn).await?;
-
     info!("Database initialized at {}", db_path);
     Ok(DbHandle { conn })
 }
 
 pub struct BuiltinProvider {
+    pub builtin_id: &'static str,
     pub name: &'static str,
     pub provider_type: ProviderType,
     pub api_host: &'static str,
@@ -65,6 +63,7 @@ pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
 
     vec![
         BuiltinProvider {
+            builtin_id: "openai",
             name: "OpenAI",
             provider_type: ProviderType::OpenAI,
             api_host: "https://api.openai.com",
@@ -96,6 +95,7 @@ pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
             ],
         },
         BuiltinProvider {
+            builtin_id: "openai_responses",
             name: "OpenAI Responses",
             provider_type: ProviderType::OpenAIResponses,
             api_host: "https://api.openai.com",
@@ -121,6 +121,7 @@ pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
             ],
         },
         BuiltinProvider {
+            builtin_id: "gemini",
             name: "Gemini",
             provider_type: ProviderType::Gemini,
             api_host: "https://generativelanguage.googleapis.com",
@@ -146,6 +147,7 @@ pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
             ],
         },
         BuiltinProvider {
+            builtin_id: "anthropic",
             name: "Claude",
             provider_type: ProviderType::Anthropic,
             api_host: "https://api.anthropic.com",
@@ -171,6 +173,7 @@ pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
             ],
         },
         BuiltinProvider {
+            builtin_id: "deepseek",
             name: "DeepSeek",
             provider_type: ProviderType::OpenAI,
             api_host: "https://api.deepseek.com",
@@ -190,6 +193,7 @@ pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
             ],
         },
         BuiltinProvider {
+            builtin_id: "xai",
             name: "xAI",
             provider_type: ProviderType::OpenAI,
             api_host: "https://api.x.ai",
@@ -209,6 +213,7 @@ pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
             ],
         },
         BuiltinProvider {
+            builtin_id: "glm",
             name: "GLM",
             provider_type: ProviderType::OpenAI,
             api_host: "https://open.bigmodel.cn/api/paas",
@@ -228,6 +233,7 @@ pub fn get_builtin_providers() -> Vec<BuiltinProvider> {
             ],
         },
         BuiltinProvider {
+            builtin_id: "minimax",
             name: "MiniMax",
             provider_type: ProviderType::OpenAI,
             api_host: "https://api.minimaxi.com",
@@ -268,6 +274,7 @@ async fn seed_builtin_providers(db: &DatabaseConnection) -> Result<()> {
                 api_host: bp.api_host.to_string(),
                 api_path: None,
                 enabled: true,
+                builtin_id: None,
             },
         )
         .await?;

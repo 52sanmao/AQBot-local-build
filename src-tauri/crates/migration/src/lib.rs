@@ -25,6 +25,7 @@ mod m20250123_000001_add_category_system_prompt;
 mod m20250717_000001_add_agent_support;
 mod m20250718_000001_add_sdk_context_backup;
 mod m20250719_000001_add_skill_states;
+mod m20250720_000001_add_provider_builtin_id;
 
 pub struct Migrator;
 
@@ -57,6 +58,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250717_000001_add_agent_support::Migration),
             Box::new(m20250718_000001_add_sdk_context_backup::Migration),
             Box::new(m20250719_000001_add_skill_states::Migration),
+            Box::new(m20250720_000001_add_provider_builtin_id::Migration),
         ]
     }
 }

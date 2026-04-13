@@ -691,18 +691,20 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
             checkedChildren={t('common.enabled')}
             unCheckedChildren={t('common.disabled')}
           />
-          <Popconfirm
-            title={t('settings.deleteProviderConfirm')}
-            onConfirm={async () => {
-              await deleteProvider(providerId);
-              setSelectedProviderId(null);
-            }}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-            okButtonProps={{ danger: true }}
-          >
-            <Button danger icon={<Trash2 size={16} />} />
-          </Popconfirm>
+          {!provider.builtin_id && (
+            <Popconfirm
+              title={t('settings.deleteProviderConfirm')}
+              onConfirm={async () => {
+                await deleteProvider(providerId);
+                setSelectedProviderId(null);
+              }}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+              okButtonProps={{ danger: true }}
+            >
+              <Button danger icon={<Trash2 size={16} />} />
+            </Popconfirm>
+          )}
         </Space>
       </div>
 

@@ -25,6 +25,7 @@ pub struct ProviderConfig {
     pub proxy_config: Option<ProviderProxyConfig>,
     pub custom_headers: Option<String>,
     pub icon: Option<String>,
+    pub builtin_id: Option<String>,
     pub sort_order: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -98,6 +99,8 @@ pub struct CreateProviderInput {
     pub api_host: String,
     pub api_path: Option<String>,
     pub enabled: bool,
+    #[serde(default)]
+    pub builtin_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

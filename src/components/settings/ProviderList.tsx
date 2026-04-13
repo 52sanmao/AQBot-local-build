@@ -1,6 +1,5 @@
-import { Button, Input, Modal, Form, Select, Switch, App, theme } from 'antd';
-import { Plus, Search, GripVertical, RotateCcw } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { Button, Input, Modal, Form, Select, Switch, App, theme, Divider } from 'antd';
+import { Plus, Search, GripVertical } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -136,9 +135,7 @@ export function ProviderList() {
 
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const [initLoading, setInitLoading] = useState(false);
   const [form] = Form.useForm();
-  const fetchProviders = useProviderStore((s) => s.fetchProviders);
 
   const filteredProviders = useMemo(
     () =>
@@ -146,6 +143,16 @@ export function ProviderList() {
         p.name.toLowerCase().includes(search.toLowerCase()),
       ),
     [providers, search],
+  );
+
+  const enabledProviders = useMemo(
+    () => filteredProviders.filter((p) => p.enabled),
+    [filteredProviders],
+  );
+
+  const disabledProviders = useMemo(
+    () => filteredProviders.filter((p) => !p.enabled),
+    [filteredProviders],
   );
 
   const handleAddProvider = async () => {
@@ -170,27 +177,33 @@ export function ProviderList() {
     form.setFieldValue('api_host', DEFAULT_HOSTS[type]);
   };
 
-  const [initModalOpen, setInitModalOpen] = useState(false);
-
-  const handleInitProviders = async (overwrite: boolean) => {
-    setInitLoading(true);
-    setInitModalOpen(false);
-    try {
-      const result = await invoke<{ added: string[]; updated: string[]; skipped: string[] }>(
-        'initialize_providers',
-        { overwrite },
-      );
-      await fetchProviders();
-      const parts: string[] = [];
-      if (result.added.length) parts.push(t('settings.initAdded', { names: result.added.join(', ') }));
-      if (result.updated.length) parts.push(t('settings.initUpdated', { names: result.updated.join(', ') }));
-      if (result.skipped.length) parts.push(t('settings.initSkipped', { names: result.skipped.join(', ') }));
-      message.success(parts.join('；') || t('settings.initNone'));
-    } catch (e) {
-      message.error(String(e));
-    } finally {
-      setInitLoading(false);
+  const handleDragEnd = (sectionProviders: ProviderConfig[]) => (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const ids = sectionProviders.map((p) => p.id);
+      const oldIndex = ids.indexOf(String(active.id));
+      const newIndex = ids.indexOf(String(over.id));
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newIds = [...ids];
+        newIds.splice(oldIndex, 1);
+        newIds.splice(newIndex, 0, String(active.id));
+        // Build full reorder: reordered section + other section
+        const otherIds = (sectionProviders === enabledProviders ? disabledProviders : enabledProviders).map((p) => p.id);
+        const fullIds = sectionProviders === enabledProviders
+          ? [...newIds, ...otherIds]
+          : [...otherIds, ...newIds];
+        reorderProviders(fullIds);
+      }
     }
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 600,
+    color: token.colorTextTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    padding: '4px 12px 2px',
   };
 
   return (
@@ -206,55 +219,74 @@ export function ProviderList() {
         />
         <Button
           type="default"
-          icon={<RotateCcw size={16} />}
-          onClick={() => setInitModalOpen(true)}
-          loading={initLoading}
-          style={{ flexShrink: 0 }}
-        />
-        <Button
-          type="default"
           icon={<Plus size={16} />}
           onClick={() => setModalOpen(true)}
           style={{ flexShrink: 0 }}
         />
       </div>
-      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={(event: DragEndEvent) => {
-            const { active, over } = event;
-            if (over && active.id !== over.id) {
-              const ids = filteredProviders.map((p) => p.id);
-              const oldIndex = ids.indexOf(String(active.id));
-              const newIndex = ids.indexOf(String(over.id));
-              if (oldIndex !== -1 && newIndex !== -1) {
-                const newIds = [...ids];
-                newIds.splice(oldIndex, 1);
-                newIds.splice(newIndex, 0, String(active.id));
-                reorderProviders(newIds);
-              }
-            }
-          }}
-        >
-          <SortableContext
-            items={filteredProviders.map((p) => p.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {filteredProviders.map((provider) => (
-              <SortableProviderItem
-                key={provider.id}
-                provider={provider}
-                isSelected={selectedProviderId === provider.id}
-                token={token}
-                onSelect={() => setSelectedProviderId(provider.id)}
-                onToggle={(checked) => toggleProvider(provider.id, checked)}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
-      </div>
+      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0">
+        {enabledProviders.length > 0 && (
+          <>
+            <div style={sectionHeaderStyle}>{t('settings.enabledProviders', '已启用')}</div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd(enabledProviders)}
+            >
+              <SortableContext
+                items={enabledProviders.map((p) => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-col gap-1">
+                  {enabledProviders.map((provider) => (
+                    <SortableProviderItem
+                      key={provider.id}
+                      provider={provider}
+                      isSelected={selectedProviderId === provider.id}
+                      token={token}
+                      onSelect={() => setSelectedProviderId(provider.id)}
+                      onToggle={(checked) => toggleProvider(provider.id, checked)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </>
+        )}
 
+        {enabledProviders.length > 0 && disabledProviders.length > 0 && (
+          <Divider style={{ margin: '8px 0' }} />
+        )}
+
+        {disabledProviders.length > 0 && (
+          <>
+            <div style={sectionHeaderStyle}>{t('settings.disabledProviders', '未启用')}</div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd(disabledProviders)}
+            >
+              <SortableContext
+                items={disabledProviders.map((p) => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-col gap-1">
+                  {disabledProviders.map((provider) => (
+                    <SortableProviderItem
+                      key={provider.id}
+                      provider={provider}
+                      isSelected={selectedProviderId === provider.id}
+                      token={token}
+                      onSelect={() => setSelectedProviderId(provider.id)}
+                      onToggle={(checked) => toggleProvider(provider.id, checked)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </>
+        )}
+      </div>
 
       <Modal
         title={t('settings.addProvider')}
@@ -287,26 +319,6 @@ export function ProviderList() {
             <Input placeholder="https://api.openai.com" />
           </Form.Item>
         </Form>
-      </Modal>
-
-      <Modal
-        title={t('settings.initProviders')}
-        open={initModalOpen}
-        onCancel={() => setInitModalOpen(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setInitModalOpen(false)}>
-            {t('common.cancel')}
-          </Button>,
-          <Button key="add" type="default" onClick={() => handleInitProviders(false)}>
-            {t('settings.initAddOnly')}
-          </Button>,
-          <Button key="overwrite" type="primary" danger onClick={() => handleInitProviders(true)}>
-            {t('settings.initOverwrite')}
-          </Button>,
-        ]}
-      >
-        <p>{t('settings.initProvidersDesc')}</p>
-        <p style={{ marginTop: 8, fontSize: 12, opacity: 0.65 }}>{t('settings.initOverwriteHint')}</p>
       </Modal>
     </div>
   );
