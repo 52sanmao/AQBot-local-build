@@ -67,6 +67,7 @@ export function InputArea() {
   const userMinHeightRef = useRef(userMinHeight);
   userMinHeightRef.current = userMinHeight;
   const dragStateRef = useRef<{ startY: number; startH: number } | null>(null);
+  const hasUserResizedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Multi-model companion state
@@ -775,7 +776,10 @@ export function InputArea() {
 
       setValue('');
       setAttachedFiles([]);
-      // Reset textarea height after clearing content
+      // Reset textarea height and drag state after clearing content
+      hasUserResizedRef.current = false;
+      setUserMinHeight(INITIAL_MIN_HEIGHT);
+      userMinHeightRef.current = INITIAL_MIN_HEIGHT;
       requestAnimationFrame(() => {
         if (textareaRef.current) {
           textareaRef.current.style.height = 'auto';
@@ -798,7 +802,9 @@ export function InputArea() {
         const textarea = textareaRef.current;
         if (textarea) {
           textarea.style.height = 'auto';
-          const desired = Math.max(textarea.scrollHeight, userMinHeightRef.current);
+          const desired = hasUserResizedRef.current
+            ? userMinHeightRef.current
+            : Math.max(textarea.scrollHeight, userMinHeightRef.current);
           textarea.style.height = Math.min(desired, ABSOLUTE_MAX_HEIGHT) + 'px';
         }
       });
@@ -812,6 +818,7 @@ export function InputArea() {
       .find((message) => message.role === 'user' && message.status !== 'error');
     if (!lastUserMessage?.content) return;
     setValue(lastUserMessage.content);
+    hasUserResizedRef.current = false;
     requestAnimationFrame(() => {
       const textarea = textareaRef.current;
       if (!textarea) return;
@@ -930,9 +937,12 @@ export function InputArea() {
   );
 
   // Auto-resize textarea: height = max(userMinHeight, contentHeight), capped at ABSOLUTE_MAX
+  // When user has explicitly dragged to resize, lock height to userMinHeight (content scrolls)
   const autoResizeTextarea = useCallback((el: HTMLTextAreaElement) => {
     el.style.height = 'auto';
-    const desired = Math.max(el.scrollHeight, userMinHeightRef.current);
+    const desired = hasUserResizedRef.current
+      ? userMinHeightRef.current
+      : Math.max(el.scrollHeight, userMinHeightRef.current);
     el.style.height = Math.min(desired, ABSOLUTE_MAX_HEIGHT) + 'px';
   }, []);
 
@@ -951,12 +961,11 @@ export function InputArea() {
       if (!dragStateRef.current) return;
       const delta = dragStateRef.current.startY - ev.clientY;
       const newH = Math.max(INITIAL_MIN_HEIGHT, Math.min(ABSOLUTE_MAX_HEIGHT, dragStateRef.current.startH + delta));
+      hasUserResizedRef.current = true;
       setUserMinHeight(newH);
       userMinHeightRef.current = newH;
       if (textarea) {
-        textarea.style.height = 'auto';
-        const desired = Math.max(textarea.scrollHeight, newH);
-        textarea.style.height = Math.min(desired, ABSOLUTE_MAX_HEIGHT) + 'px';
+        textarea.style.height = newH + 'px';
       }
     };
     const onMouseUp = () => {
@@ -1030,7 +1039,9 @@ export function InputArea() {
         if (!textarea) return;
         textarea.focus();
         textarea.style.height = 'auto';
-        const desired = Math.max(textarea.scrollHeight, userMinHeightRef.current);
+        const desired = hasUserResizedRef.current
+          ? userMinHeightRef.current
+          : Math.max(textarea.scrollHeight, userMinHeightRef.current);
         textarea.style.height = Math.min(desired, ABSOLUTE_MAX_HEIGHT) + 'px';
       });
     };
