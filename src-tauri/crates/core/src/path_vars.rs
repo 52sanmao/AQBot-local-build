@@ -21,9 +21,7 @@ pub fn encode_path(absolute_path: &str) -> String {
         None => return absolute_path.to_string(),
     };
     let aqbot_home = home.join(".aqbot");
-    let documents_root = dirs::document_dir()
-        .map(|d| d.join("aqbot"))
-        .unwrap_or_else(|| home.join("Documents").join("aqbot"));
+    let documents_root = crate::storage_paths::documents_root();
 
     // Try the most specific prefix first so that e.g. ~/.aqbot/… is not
     // encoded as {{HOME}}/.aqbot/… when {{AQBOT_HOME}}/… is more precise.
@@ -54,9 +52,7 @@ pub fn decode_path(encoded_path: &str) -> String {
         None => return encoded_path.to_string(),
     };
     let aqbot_home = home.join(".aqbot");
-    let documents_root = dirs::document_dir()
-        .map(|d| d.join("aqbot"))
-        .unwrap_or_else(|| home.join("Documents").join("aqbot"));
+    let documents_root = crate::storage_paths::documents_root();
 
     if let Some(rest) = encoded_path.strip_prefix(VAR_AQBOT_HOME) {
         return format!(

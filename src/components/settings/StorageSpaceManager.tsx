@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Typography, Button, Space, Spin, List, App } from 'antd';
-import { FolderOpen, Image, FileText, CloudUpload } from 'lucide-react';
+import { FolderOpen, Image, FileText, CloudUpload, FolderEdit, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/lib/invoke';
 import { SettingsGroup } from './SettingsGroup';
@@ -16,6 +16,17 @@ interface BucketStats {
 interface StorageInventory {
   buckets: BucketStats[];
   documents_root: string;
+}
+
+interface ValidateResult {
+  exists: boolean;
+  is_empty: boolean;
+  writable: boolean;
+}
+
+interface ChangeResult {
+  files_moved: number;
+  files_failed: number;
 }
 
 function formatBytes(bytes: number): string {
@@ -34,9 +45,10 @@ const BUCKET_ICONS: Record<string, React.ReactNode> = {
 
 export function StorageSpaceManager() {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [inventory, setInventory] = useState<StorageInventory | null>(null);
   const [loading, setLoading] = useState(true);
+  const [changing, setChanging] = useState(false);
 
   const loadInventory = async () => {
     setLoading(true);
@@ -60,6 +72,107 @@ export function StorageSpaceManager() {
     } catch (e) {
       message.error(String(e));
     }
+  };
+
+  const promptRestart = () => {
+    modal.confirm({
+      title: t('settings.storage.restartRequired'),
+      okText: t('settings.storage.restartNow'),
+      cancelText: t('settings.storage.restartLater'),
+      onOk: async () => {
+        try {
+          const { relaunch } = await import('@tauri-apps/plugin-process');
+          await relaunch();
+        } catch {
+          // ignore
+        }
+      },
+    });
+  };
+
+  const handleChangeDir = async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selected = await open({ directory: true, multiple: false });
+      if (!selected) return;
+
+      const newPath = selected as string;
+
+      // Validate the directory
+      const validation = await invoke<ValidateResult>('validate_documents_root', { path: newPath });
+
+      if (!validation.writable) {
+        message.error(t('settings.storage.dirNotWritable'));
+        return;
+      }
+
+      let migrate = false;
+
+      if (!validation.is_empty) {
+        // Target not empty — no migration allowed, just warn and confirm
+        const proceed = await new Promise<boolean>((resolve) => {
+          modal.confirm({
+            title: t('settings.storage.changeDirTitle'),
+            content: t('settings.storage.changeDirNotEmpty'),
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+        if (!proceed) return;
+      } else {
+        // Target is empty — ask about migration
+        migrate = await new Promise<boolean>((resolve) => {
+          modal.confirm({
+            title: t('settings.storage.migratePrompt'),
+            okText: t('settings.storage.migrateYes'),
+            cancelText: t('settings.storage.migrateNo'),
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+      }
+
+      setChanging(true);
+      try {
+        const result = await invoke<ChangeResult>('change_documents_root', {
+          newPath,
+          migrate,
+        });
+
+        if (migrate && result.files_moved > 0) {
+          message.success(
+            t('settings.storage.changeDirSuccessMigrate', { count: result.files_moved })
+          );
+        } else {
+          message.success(t('settings.storage.changeDirSuccess'));
+        }
+
+        await loadInventory();
+        promptRestart();
+      } catch (e) {
+        message.error(`${t('settings.storage.changeDirFailed')}: ${e}`);
+      } finally {
+        setChanging(false);
+      }
+    } catch {
+      // User cancelled the dialog
+    }
+  };
+
+  const handleResetDir = async () => {
+    modal.confirm({
+      title: t('settings.storage.resetDirConfirm'),
+      onOk: async () => {
+        try {
+          await invoke('reset_documents_root');
+          message.success(t('settings.storage.resetDirSuccess'));
+          await loadInventory();
+          promptRestart();
+        } catch (e) {
+          message.error(String(e));
+        }
+      },
+    });
   };
 
   const totalBytes = inventory?.buckets.reduce((sum, b) => sum + b.total_bytes, 0) ?? 0;
@@ -119,11 +232,33 @@ export function StorageSpaceManager() {
           </SettingsGroup>
 
           {inventory.documents_root && (
-            <div className="mt-3">
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t('settings.storage.documentsRoot')}: {inventory.documents_root}
-              </Text>
-            </div>
+            <SettingsGroup title={t('settings.storage.currentDir')}>
+              <div className="flex items-center justify-between gap-4">
+                <Text
+                  type="secondary"
+                  style={{ fontSize: 13, wordBreak: 'break-all', flex: 1 }}
+                >
+                  {inventory.documents_root}
+                </Text>
+                <Space>
+                  <Button
+                    size="small"
+                    icon={<FolderEdit size={14} />}
+                    loading={changing}
+                    onClick={handleChangeDir}
+                  >
+                    {t('settings.storage.changeDir')}
+                  </Button>
+                  <Button
+                    size="small"
+                    icon={<RotateCcw size={14} />}
+                    onClick={handleResetDir}
+                  >
+                    {t('settings.storage.resetDir')}
+                  </Button>
+                </Space>
+              </div>
+            </SettingsGroup>
           )}
         </>
       ) : null}

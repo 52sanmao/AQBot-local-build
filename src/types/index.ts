@@ -408,6 +408,8 @@ export interface AppSettings {
   webdav_max_remote_backups?: number;
   webdav_include_documents?: boolean;
   last_selected_conversation_id?: string | null;
+  /** Custom documents root override (overrides ~/Documents/aqbot/) */
+  documents_root_override?: string | null;
   /** Auto update check interval in minutes (default 60, min 1) */
   update_check_interval?: number;
   /** Global system prompt fallback — used when a conversation has no custom system prompt */

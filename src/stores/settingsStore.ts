@@ -77,6 +77,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   notify_import: true,
   notify_errors: true,
   last_selected_conversation_id: null,
+  documents_root_override: null,
   update_check_interval: 60,
   default_system_prompt: null,
   chat_minimap_enabled: false,

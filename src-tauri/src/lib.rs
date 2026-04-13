@@ -287,6 +287,9 @@ pub fn run() {
             // storage
             commands::storage::get_storage_inventory,
             commands::storage::open_storage_directory,
+            commands::storage::validate_documents_root,
+            commands::storage::change_documents_root,
+            commands::storage::reset_documents_root,
             // agent
             commands::agent::agent_query,
             commands::agent::agent_cancel,
@@ -438,10 +441,21 @@ pub fn run() {
             // Migrate any hardcoded absolute paths in settings to dynamic variables
             rt.block_on(aqbot_core::path_vars::migrate_hardcoded_paths(&db_handle.conn));
 
-            let tray_language = rt
+            let app_settings = rt
                 .block_on(aqbot_core::repo::settings::get_settings(&db_handle.conn))
-                .map(|settings| settings.language)
-                .unwrap_or_else(|_| "zh-CN".to_string());
+                .unwrap_or_default();
+
+            // Apply custom documents root (if configured) before anything
+            // that reads documents_root().
+            aqbot_core::storage_paths::init_documents_root(
+                app_settings.documents_root_override.as_ref().map(PathBuf::from),
+            );
+
+            // Re-ensure documents dirs under the (possibly custom) root
+            aqbot_core::storage_paths::ensure_documents_dirs()
+                .expect("failed to create documents storage dirs (custom root)");
+
+            let tray_language = app_settings.language.clone();
 
             app.manage(AppState {
                 sea_db: db_handle.conn,

@@ -1,7 +1,47 @@
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 
-/// Returns the documents root: ~/Documents/aqbot/
+static DOCUMENTS_ROOT_OVERRIDE: RwLock<Option<PathBuf>> = RwLock::new(None);
+
+/// Initialise the custom documents root from a stored setting.
+/// Call once during app startup; ignored if `custom` is `None`.
+pub fn init_documents_root(custom: Option<PathBuf>) {
+    if let Some(path) = custom {
+        if let Ok(mut guard) = DOCUMENTS_ROOT_OVERRIDE.write() {
+            *guard = Some(path);
+        }
+    }
+}
+
+/// Replace the documents root at runtime (e.g. after the user picks a new
+/// directory).  Takes effect immediately for all subsequent `documents_root()`
+/// calls.
+pub fn set_documents_root(path: PathBuf) {
+    if let Ok(mut guard) = DOCUMENTS_ROOT_OVERRIDE.write() {
+        *guard = Some(path);
+    }
+}
+
+/// Clear any custom override so `documents_root()` falls back to the default.
+pub fn clear_documents_root_override() {
+    if let Ok(mut guard) = DOCUMENTS_ROOT_OVERRIDE.write() {
+        *guard = None;
+    }
+}
+
+/// Returns the active documents root — custom override if set, otherwise the
+/// platform default (`~/Documents/aqbot/`).
 pub fn documents_root() -> PathBuf {
+    if let Ok(guard) = DOCUMENTS_ROOT_OVERRIDE.read() {
+        if let Some(ref custom) = *guard {
+            return custom.clone();
+        }
+    }
+    default_documents_root()
+}
+
+/// The platform default documents root: `~/Documents/aqbot/`.
+pub fn default_documents_root() -> PathBuf {
     dirs::document_dir()
         .expect("Could not determine Documents directory")
         .join("aqbot")
@@ -95,7 +135,7 @@ mod tests {
 
     #[test]
     fn documents_root_ends_with_aqbot() {
-        let root = documents_root();
+        let root = default_documents_root();
         assert!(
             root.ends_with("aqbot"),
             "Expected path ending with 'aqbot', got {:?}",
@@ -113,7 +153,7 @@ mod tests {
 
     #[test]
     fn documents_root_is_absolute() {
-        let root = documents_root();
+        let root = default_documents_root();
         assert!(root.is_absolute(), "Expected absolute path, got {:?}", root);
     }
 
