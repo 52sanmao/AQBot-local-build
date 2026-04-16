@@ -11,6 +11,7 @@ import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
 import { useUpdateChecker } from '@/hooks/useUpdateChecker';
 import appLogo from '@/assets/image/logo.png';
 import type {
+  BuiltinTitlebarActionId,
   BuiltinSettingsSidebarItemId,
   TitlebarQuickActionConfig,
 } from '@/types';
