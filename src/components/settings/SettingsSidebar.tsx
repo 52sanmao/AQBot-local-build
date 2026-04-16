@@ -1,25 +1,9 @@
 import { Menu, theme } from 'antd';
-import { Cloud, Settings, Palette, Globe, Zap, Database, Info, Search, Plug, CloudUpload, Bot, HardDrive, MessageSquare, ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore, useUIStore } from '@/stores';
 import { DEFAULT_SETTINGS_SIDEBAR_ITEMS, normalizeSettingsSidebarItems } from '@/stores/settingsStore';
 import type { SettingsSection, SettingsSidebarItemConfig } from '@/types';
-
-const MENU_ICONS: Record<SettingsSection, React.ReactNode> = {
-  providers: <Cloud size={16} />,
-  conversationSettings: <MessageSquare size={16} />,
-  defaultModel: <Bot size={16} />,
-  general: <Settings size={16} />,
-  display: <Palette size={16} />,
-  proxy: <Globe size={16} />,
-  shortcuts: <Zap size={16} />,
-  data: <Database size={16} />,
-  storage: <HardDrive size={16} />,
-  about: <Info size={16} />,
-  searchProviders: <Search size={16} />,
-  mcpServers: <Plug size={16} />,
-  backup: <CloudUpload size={16} />,
-};
+import { SETTINGS_BACK_ICON, SETTINGS_SECTION_ICONS } from './settingsSectionMeta';
 
 const SECTION_KEYS: SettingsSection[] = DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => item.id);
 
@@ -50,7 +34,7 @@ export function SettingsSidebar() {
 
   const items = resolveSidebarSections(sidebarItems).map((key) => ({
     key,
-    icon: MENU_ICONS[key],
+    icon: SETTINGS_SECTION_ICONS[key],
     label: t([`settings.${key}.title`, `settings.${key}`]),
   }));
 
@@ -78,7 +62,7 @@ export function SettingsSidebar() {
           e.currentTarget.style.backgroundColor = 'transparent';
         }}
       >
-        <ArrowLeft size={16} />
+        {SETTINGS_BACK_ICON}
         <span style={{ fontSize: 14 }}>{t('common.back')}</span>
         <span
           style={{

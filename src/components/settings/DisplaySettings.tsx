@@ -5,25 +5,17 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSettingsStore } from '@/stores';
 import {
   DEFAULT_SETTINGS_SIDEBAR_ITEMS,
-  DEFAULT_TITLEBAR_QUICK_ACTIONS,
-  normalizeSettingsSidebarItems,
   normalizeTitlebarQuickActions,
 } from '@/stores/settingsStore';
 import { invoke, isTauri } from '@/lib/invoke';
 import { SHIKI_LIGHT_THEMES, SHIKI_DARK_THEMES, formatThemeName } from '@/constants/codeThemes';
 import { SettingsGroup } from './SettingsGroup';
 import { SettingsSelect } from './SettingsSelect';
-import { EntryShelfEditor } from './EntryShelfEditor';
+import { TitlebarSettingsShortcutEditor } from './TitlebarSettingsShortcutEditor';
 import type {
   BuiltinSettingsSidebarItemId,
-  BuiltinTitlebarActionId,
-  SettingsSidebarItemConfig,
   TitlebarQuickActionConfig,
 } from '@/types';
-
-type TitlebarShelfKey = `builtin:${BuiltinTitlebarActionId}` | `settings:${BuiltinSettingsSidebarItemId}`;
-
-const SETTINGS_SECTION_KEYS = DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => item.id);
 
 export function DisplaySettings() {
   const { t } = useTranslation();
@@ -47,90 +39,38 @@ export function DisplaySettings() {
     [],
   );
 
-  const sidebarItems = normalizeSettingsSidebarItems(settings.settings_sidebar_items);
   const titlebarActions = normalizeTitlebarQuickActions(settings.titlebar_quick_actions);
 
-  const titlebarCatalog = useMemo(() => {
-    const builtinItems = DEFAULT_TITLEBAR_QUICK_ACTIONS.map((item) => ({
-      key: `builtin:${item.id}` as TitlebarShelfKey,
-      config: { kind: 'builtin-action', id: item.id, visible: false } as TitlebarQuickActionConfig,
-      label: t(`settings.titlebarAction.${item.id}`),
-      description: t('settings.entryShelf.builtinActionDescription'),
-      badge: t('settings.entryShelf.builtinActionBadge'),
-    }));
-
-    const settingsItems = DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => ({
-      key: `settings:${item.id}` as TitlebarShelfKey,
-      config: { kind: 'settings-section', id: item.id, visible: false } as TitlebarQuickActionConfig,
-      label: t([`settings.${item.id}.title`, `settings.${item.id}`]),
-      description: t('settings.entryShelf.settingsShortcutDescription'),
-      badge: t('settings.entryShelf.settingsShortcutBadge'),
-    }));
-
-    return [...builtinItems, ...settingsItems];
-  }, [t]);
-
-  const titlebarCatalogMap = useMemo(
-    () => new Map(titlebarCatalog.map((item) => [item.key, item])),
-    [titlebarCatalog],
-  );
-
-  const selectedTitlebarKeys = useMemo(
+  const settingsShortcutOptions = useMemo(
     () =>
-      titlebarActions
-        .filter((item) => item.visible)
-        .map((item) =>
-          item.kind === 'builtin-action'
-            ? (`builtin:${item.id}` as TitlebarShelfKey)
-            : (`settings:${item.id}` as TitlebarShelfKey),
-        ),
-    [titlebarActions],
-  );
-
-  const selectedTitlebarItems = selectedTitlebarKeys
-    .map((key) => titlebarCatalogMap.get(key))
-    .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-  const availableTitlebarItems = titlebarCatalog.filter((item) => !selectedTitlebarKeys.includes(item.key));
-
-  const buildTitlebarConfig = (selectedKeys: TitlebarShelfKey[]): TitlebarQuickActionConfig[] => {
-    const selectedSet = new Set(selectedKeys);
-    return [
-      ...selectedKeys
-        .map((key) => titlebarCatalogMap.get(key)?.config)
-        .filter((item): item is TitlebarQuickActionConfig => Boolean(item))
-        .map((item) => ({ ...item, visible: true })),
-      ...titlebarCatalog
-        .filter((item) => !selectedSet.has(item.key))
-        .map((item) => ({ ...item.config, visible: false })),
-    ];
-  };
-
-  const settingsCatalog = useMemo(
-    () => DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => ({
-      key: item.id,
-      label: t([`settings.${item.id}.title`, `settings.${item.id}`]),
-      description: t('settings.entryShelf.settingsSidebarDescription'),
-    })),
+      DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => ({
+        id: item.id,
+        config: { kind: 'settings-section', id: item.id, visible: false } as TitlebarQuickActionConfig,
+        label: t([`settings.${item.id}.title`, `settings.${item.id}`]),
+      })),
     [t],
   );
 
-  const settingsCatalogMap = useMemo(
-    () => new Map(settingsCatalog.map((item) => [item.key, item])),
-    [settingsCatalog],
+  const selectedShortcutIds = useMemo(
+    () =>
+      titlebarActions
+        .filter((item): item is Extract<TitlebarQuickActionConfig, { kind: 'settings-section' }> =>
+          item.kind === 'settings-section' && item.visible,
+        )
+        .map((item) => item.id),
+    [titlebarActions],
   );
 
-  const selectedSidebarKeys = sidebarItems.filter((item) => item.visible).map((item) => item.id);
-  const selectedSidebarItems = selectedSidebarKeys
-    .map((key) => settingsCatalogMap.get(key))
-    .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  const availableSidebarItems = settingsCatalog.filter((item) => !selectedSidebarKeys.includes(item.key));
+  const buildTitlebarConfig = (selectedIds: BuiltinSettingsSidebarItemId[]): TitlebarQuickActionConfig[] => {
+    const selectedSet = new Set(selectedIds);
+    const builtinItems = titlebarActions.filter((item) => item.kind === 'builtin-action');
 
-  const buildSidebarConfig = (selectedKeys: BuiltinSettingsSidebarItemId[]): SettingsSidebarItemConfig[] => {
-    const selectedSet = new Set(selectedKeys);
     return [
-      ...selectedKeys.map((id) => ({ id, visible: true })),
-      ...SETTINGS_SECTION_KEYS.filter((id) => !selectedSet.has(id)).map((id) => ({ id, visible: false })),
+      ...builtinItems,
+      ...selectedIds.map((id) => ({ kind: 'settings-section', id, visible: true }) as TitlebarQuickActionConfig),
+      ...settingsShortcutOptions
+        .filter((item) => !selectedSet.has(item.id))
+        .map((item) => ({ ...item.config, visible: false })),
     ];
   };
 
@@ -258,31 +198,21 @@ export function DisplaySettings() {
         </div>
       </SettingsGroup>
 
-      <SettingsGroup title={t('settings.customizeTitlebarActions')}>
-        <EntryShelfEditor
-          availableTitle={t('settings.entryShelf.available')}
-          selectedTitle={t('settings.entryShelf.selected')}
-          addLabel={t('settings.entryShelf.addToTitlebar')}
-          removeLabel={t('settings.entryShelf.remove')}
-          availableItems={availableTitlebarItems}
-          selectedItems={selectedTitlebarItems}
-          onAdd={(key) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig([...selectedTitlebarKeys, key as TitlebarShelfKey]) })}
-          onRemove={(key) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig(selectedTitlebarKeys.filter((current) => current !== key)) })}
-          onReorder={(keys) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig(keys as TitlebarShelfKey[]) })}
-        />
-      </SettingsGroup>
-
-      <SettingsGroup title={t('settings.customizeSettingsSidebar')}>
-        <EntryShelfEditor
-          availableTitle={t('settings.entryShelf.available')}
-          selectedTitle={t('settings.entryShelf.selected')}
-          addLabel={t('settings.entryShelf.addToSidebar')}
-          removeLabel={t('settings.entryShelf.remove')}
-          availableItems={availableSidebarItems}
-          selectedItems={selectedSidebarItems}
-          onAdd={(key) => saveSettings({ settings_sidebar_items: buildSidebarConfig([...selectedSidebarKeys, key as BuiltinSettingsSidebarItemId]) })}
-          onRemove={(key) => saveSettings({ settings_sidebar_items: buildSidebarConfig(selectedSidebarKeys.filter((current) => current !== key)) })}
-          onReorder={(keys) => saveSettings({ settings_sidebar_items: buildSidebarConfig(keys as BuiltinSettingsSidebarItemId[]) })}
+      <SettingsGroup title={t('settings.titlebarSettingsShortcuts')}>
+        <TitlebarSettingsShortcutEditor
+          description={t('settings.entryShelf.settingsShortcutDescription')}
+          allTitle={t('settings.entryShelf.allSettingsEntries')}
+          orderTitle={t('settings.entryShelf.selectedOrder')}
+          selectedLabel={t('settings.entryShelf.selectedBadge')}
+          allOptions={settingsShortcutOptions.map(({ id, label }) => ({ id, label }))}
+          selectedIds={selectedShortcutIds}
+          onToggle={(id) => {
+            const next = selectedShortcutIds.includes(id)
+              ? selectedShortcutIds.filter((current) => current !== id)
+              : [...selectedShortcutIds, id];
+            saveSettings({ titlebar_quick_actions: buildTitlebarConfig(next) });
+          }}
+          onReorder={(ids) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig(ids) })}
         />
       </SettingsGroup>
     </div>

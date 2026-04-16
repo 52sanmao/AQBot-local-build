@@ -894,7 +894,10 @@
       "settingsShortcutBadge": "設定頁",
       "builtinActionDescription": "現有標題列內建按鈕",
       "settingsShortcutDescription": "從標題列直接開啟對應設定頁",
-      "settingsSidebarDescription": "在左側設定欄顯示該頁面入口"
+      "settingsSidebarDescription": "在左側設定欄顯示該頁面入口",
+      "allSettingsEntries": "????????",
+      "selectedOrder": "???????",
+      "selectedBadge": "???"
     },
     "titlebarAction": {
       "pin": "視窗置頂",
@@ -905,7 +908,8 @@
       "update": "檢查更新",
       "reload": "重新載入頁面",
       "settings": "設定開關"
-    }
+    },
+    "titlebarSettingsShortcuts": "?????????"
   },
   "backup": {
     "title": "備份中心",

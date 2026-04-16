@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DisplaySettings } from '../DisplaySettings';
 
@@ -14,11 +15,6 @@ let mockedSettings: Record<string, unknown> = {
   code_theme_light: 'github-light',
   code_theme: 'poimandres',
   border_radius: 8,
-  settings_sidebar_items: [
-    { id: 'general', visible: true },
-    { id: 'display', visible: true },
-    { id: 'providers', visible: false },
-  ],
   titlebar_quick_actions: [
     { kind: 'builtin-action', id: 'settings', visible: true },
     { kind: 'settings-section', id: 'providers', visible: true },
@@ -49,12 +45,27 @@ describe('DisplaySettings', () => {
     saveSettings.mockReset();
   });
 
-  it('shows available and selected areas for the titlebar shelf editor', () => {
+  it('shows the single-box titlebar shortcut editor', () => {
     render(<DisplaySettings />);
 
-    expect(screen.getByText('settings.entryShelf.available')).toBeInTheDocument();
-    expect(screen.getByText('settings.entryShelf.selected')).toBeInTheDocument();
-    expect(screen.getByText('settings.entryShelf.addToTitlebar')).toBeInTheDocument();
+    expect(screen.getByText('settings.entryShelf.allSettingsEntries')).toBeInTheDocument();
+    expect(screen.getByText('settings.entryShelf.selectedOrder')).toBeInTheDocument();
     expect(screen.getByText('settings.providers.title')).toBeInTheDocument();
+  });
+
+  it('toggles a settings shortcut when clicking its chip', async () => {
+    render(<DisplaySettings />);
+
+    await userEvent.click(screen.getByRole('button', { name: /settings.general.title/i }));
+
+    const [{ titlebar_quick_actions }] = saveSettings.mock.calls[0];
+
+    expect(titlebar_quick_actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'builtin-action', id: 'settings', visible: true }),
+        expect.objectContaining({ kind: 'settings-section', id: 'providers', visible: true }),
+        expect.objectContaining({ kind: 'settings-section', id: 'general', visible: true }),
+      ]),
+    );
   });
 });

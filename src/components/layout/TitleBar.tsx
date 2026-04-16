@@ -9,6 +9,7 @@ import { normalizeTitlebarQuickActions } from '@/stores/settingsStore';
 import { isTauri, invoke } from '@/lib/invoke';
 import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
 import { useUpdateChecker } from '@/hooks/useUpdateChecker';
+import { SETTINGS_SECTION_ICONS } from '@/components/settings/settingsSectionMeta';
 import appLogo from '@/assets/image/logo.png';
 import type {
   BuiltinTitlebarActionId,
@@ -419,6 +420,20 @@ export function TitleBar() {
     },
   });
 
+  const titlebarChipBase: React.CSSProperties = {
+    width: 30,
+    height: 30,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    backgroundColor: token.colorBgContainer,
+    color: token.colorTextSecondary,
+    cursor: 'pointer',
+    padding: 0,
+  };
+
   return (
     <div
       className="title-bar-drag"
@@ -707,21 +722,27 @@ export function TitleBar() {
 
           return resolvedTitlebarActions.map((item) => {
             if (item.kind === 'settings-section') {
+              const label = t([`settings.${item.id}.title`, `settings.${item.id}`]);
               return (
-                <Tooltip title={t([`settings.${item.id}.title`, `settings.${item.id}`])} key={`settings:${item.id}`}>
+                <Tooltip title={label} key={`settings:${item.id}`}>
                   <button
-                    aria-label={t([`settings.${item.id}.title`, `settings.${item.id}`])}
+                    aria-label={label}
                     onClick={() => openSettingsSection(item.id)}
                     style={{
-                      ...buttonBase,
-                      width: 'auto',
-                      paddingInline: 12,
-                      color: token.colorTextSecondary,
-                      fontSize: 13,
+                      ...titlebarChipBase,
                     }}
-                    {...hoverHandlers(token.colorTextSecondary)}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = token.colorPrimaryBg;
+                      e.currentTarget.style.borderColor = token.colorPrimaryBorder;
+                      e.currentTarget.style.color = token.colorPrimary;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = token.colorBgContainer;
+                      e.currentTarget.style.borderColor = token.colorBorderSecondary;
+                      e.currentTarget.style.color = token.colorTextSecondary;
+                    }}
                   >
-                    {t([`settings.${item.id}.title`, `settings.${item.id}`])}
+                    {SETTINGS_SECTION_ICONS[item.id]}
                   </button>
                 </Tooltip>
               );

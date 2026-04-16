@@ -894,7 +894,10 @@
       "settingsShortcutBadge": "设置页",
       "builtinActionDescription": "现有标题栏内置按钮",
       "settingsShortcutDescription": "从标题栏直接打开对应设置页",
-      "settingsSidebarDescription": "在左侧设置栏中显示该页面入口"
+      "settingsSidebarDescription": "在左侧设置栏中显示该页面入口",
+      "allSettingsEntries": "????????",
+      "selectedOrder": "???????",
+      "selectedBadge": "???"
     },
     "titlebarAction": {
       "pin": "窗口置顶",
@@ -905,7 +908,8 @@
       "update": "检查更新",
       "reload": "重新加载页面",
       "settings": "设置开关"
-    }
+    },
+    "titlebarSettingsShortcuts": "?????????"
   },
   "backup": {
     "title": "备份中心",
