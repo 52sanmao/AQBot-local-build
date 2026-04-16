@@ -1230,7 +1230,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                 onClick={handleEnterBatchMode}
               />
             </Tooltip>
-             <Tooltip title={t('settings.refreshModels')}>
+             <Tooltip title={t('settings.syncModels')}>
                 <Button
                   type="text"
                   size="small"
