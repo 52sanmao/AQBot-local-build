@@ -88,6 +88,18 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Disable updater signing for test build
+        shell: pwsh
+        run: |
+          $configPath = "src-tauri/tauri.conf.json"
+          $config = Get-Content -Path $configPath -Raw | ConvertFrom-Json
+          $config.bundle.createUpdaterArtifacts = $false
+          if ($null -ne $config.plugins -and $null -ne $config.plugins.updater) {
+            $config.plugins.updater.pubkey = ""
+            $config.plugins.updater.endpoints = @()
+          }
+          $config | ConvertTo-Json -Depth 100 | Set-Content -Path $configPath -Encoding UTF8
+
       - name: Build with Tauri
         uses: tauri-apps/tauri-action@v0
         env:
