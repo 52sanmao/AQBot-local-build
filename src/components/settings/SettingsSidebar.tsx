@@ -2,7 +2,7 @@ import { Menu, theme } from 'antd';
 import { Cloud, Settings, Palette, Globe, Zap, Database, Info, Search, Plug, CloudUpload, Bot, HardDrive, MessageSquare, ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore, useUIStore } from '@/stores';
-import { DEFAULT_SETTINGS_SIDEBAR_ITEMS } from '@/stores/settingsStore';
+import { DEFAULT_SETTINGS_SIDEBAR_ITEMS, normalizeSettingsSidebarItems } from '@/stores/settingsStore';
 import type { SettingsSection, SettingsSidebarItemConfig } from '@/types';
 
 const MENU_ICONS: Record<SettingsSection, React.ReactNode> = {
@@ -24,13 +24,10 @@ const MENU_ICONS: Record<SettingsSection, React.ReactNode> = {
 const SECTION_KEYS: SettingsSection[] = DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => item.id);
 
 function resolveSidebarSections(saved?: SettingsSidebarItemConfig[]): SettingsSection[] {
-  const validIds = new Set<SettingsSection>(SECTION_KEYS);
-  const savedItems = saved ?? DEFAULT_SETTINGS_SIDEBAR_ITEMS;
   const seen = new Set<SettingsSection>();
   const resolved: SettingsSection[] = [];
 
-  for (const item of savedItems) {
-    if (!validIds.has(item.id)) continue;
+  for (const item of normalizeSettingsSidebarItems(saved)) {
     seen.add(item.id);
     if (item.visible) resolved.push(item.id);
   }

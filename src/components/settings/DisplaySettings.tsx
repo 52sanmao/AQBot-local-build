@@ -1,14 +1,29 @@
-import { Button, ColorPicker, Divider, Segmented, Slider, Space, Switch } from 'antd';
-import { Sun, Moon, Monitor, ArrowUp, ArrowDown } from 'lucide-react';
+import { ColorPicker, Divider, Segmented, Slider } from 'antd';
+import { Sun, Moon, Monitor } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { useSettingsStore } from '@/stores';
-import { DEFAULT_SETTINGS_SIDEBAR_ITEMS, DEFAULT_TITLEBAR_QUICK_ACTIONS } from '@/stores/settingsStore';
+import {
+  DEFAULT_SETTINGS_SIDEBAR_ITEMS,
+  DEFAULT_TITLEBAR_QUICK_ACTIONS,
+  normalizeSettingsSidebarItems,
+  normalizeTitlebarQuickActions,
+} from '@/stores/settingsStore';
 import { invoke, isTauri } from '@/lib/invoke';
 import { SHIKI_LIGHT_THEMES, SHIKI_DARK_THEMES, formatThemeName } from '@/constants/codeThemes';
 import { SettingsGroup } from './SettingsGroup';
 import { SettingsSelect } from './SettingsSelect';
-import type { SettingsSidebarItemConfig, TitlebarQuickActionConfig } from '@/types';
+import { EntryShelfEditor } from './EntryShelfEditor';
+import type {
+  BuiltinSettingsSidebarItemId,
+  BuiltinTitlebarActionId,
+  SettingsSidebarItemConfig,
+  TitlebarQuickActionConfig,
+} from '@/types';
+
+type TitlebarShelfKey = `builtin:${BuiltinTitlebarActionId}` | `settings:${BuiltinSettingsSidebarItemId}`;
+
+const SETTINGS_SECTION_KEYS = DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => item.id);
 
 export function DisplaySettings() {
   const { t } = useTranslation();
@@ -32,24 +47,91 @@ export function DisplaySettings() {
     [],
   );
 
-  const sidebarItems = settings.settings_sidebar_items ?? DEFAULT_SETTINGS_SIDEBAR_ITEMS;
-  const titlebarActions = settings.titlebar_quick_actions ?? DEFAULT_TITLEBAR_QUICK_ACTIONS;
+  const sidebarItems = normalizeSettingsSidebarItems(settings.settings_sidebar_items);
+  const titlebarActions = normalizeTitlebarQuickActions(settings.titlebar_quick_actions);
 
-  function moveItem<T>(items: T[], from: number, to: number) {
-    const next = [...items];
-    const [item] = next.splice(from, 1);
-    next.splice(to, 0, item);
-    return next;
-  }
+  const titlebarCatalog = useMemo(() => {
+    const builtinItems = DEFAULT_TITLEBAR_QUICK_ACTIONS.map((item) => ({
+      key: `builtin:${item.id}` as TitlebarShelfKey,
+      config: { kind: 'builtin-action', id: item.id, visible: false } as TitlebarQuickActionConfig,
+      label: t(`settings.titlebarAction.${item.id}`),
+      description: t('settings.entryShelf.builtinActionDescription'),
+      badge: t('settings.entryShelf.builtinActionBadge'),
+    }));
 
-  const updateSidebarItems = (next: SettingsSidebarItemConfig[]) => {
-    if (!next.some((item) => item.visible)) return;
-    saveSettings({ settings_sidebar_items: next });
+    const settingsItems = DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => ({
+      key: `settings:${item.id}` as TitlebarShelfKey,
+      config: { kind: 'settings-section', id: item.id, visible: false } as TitlebarQuickActionConfig,
+      label: t([`settings.${item.id}.title`, `settings.${item.id}`]),
+      description: t('settings.entryShelf.settingsShortcutDescription'),
+      badge: t('settings.entryShelf.settingsShortcutBadge'),
+    }));
+
+    return [...builtinItems, ...settingsItems];
+  }, [t]);
+
+  const titlebarCatalogMap = useMemo(
+    () => new Map(titlebarCatalog.map((item) => [item.key, item])),
+    [titlebarCatalog],
+  );
+
+  const selectedTitlebarKeys = useMemo(
+    () =>
+      titlebarActions
+        .filter((item) => item.visible)
+        .map((item) =>
+          item.kind === 'builtin-action'
+            ? (`builtin:${item.id}` as TitlebarShelfKey)
+            : (`settings:${item.id}` as TitlebarShelfKey),
+        ),
+    [titlebarActions],
+  );
+
+  const selectedTitlebarItems = selectedTitlebarKeys
+    .map((key) => titlebarCatalogMap.get(key))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+  const availableTitlebarItems = titlebarCatalog.filter((item) => !selectedTitlebarKeys.includes(item.key));
+
+  const buildTitlebarConfig = (selectedKeys: TitlebarShelfKey[]): TitlebarQuickActionConfig[] => {
+    const selectedSet = new Set(selectedKeys);
+    return [
+      ...selectedKeys
+        .map((key) => titlebarCatalogMap.get(key)?.config)
+        .filter((item): item is TitlebarQuickActionConfig => Boolean(item))
+        .map((item) => ({ ...item, visible: true })),
+      ...titlebarCatalog
+        .filter((item) => !selectedSet.has(item.key))
+        .map((item) => ({ ...item.config, visible: false })),
+    ];
   };
 
-  const updateTitlebarActions = (next: TitlebarQuickActionConfig[]) => {
-    if (!next.some((item) => item.visible)) return;
-    saveSettings({ titlebar_quick_actions: next });
+  const settingsCatalog = useMemo(
+    () => DEFAULT_SETTINGS_SIDEBAR_ITEMS.map((item) => ({
+      key: item.id,
+      label: t([`settings.${item.id}.title`, `settings.${item.id}`]),
+      description: t('settings.entryShelf.settingsSidebarDescription'),
+    })),
+    [t],
+  );
+
+  const settingsCatalogMap = useMemo(
+    () => new Map(settingsCatalog.map((item) => [item.key, item])),
+    [settingsCatalog],
+  );
+
+  const selectedSidebarKeys = sidebarItems.filter((item) => item.visible).map((item) => item.id);
+  const selectedSidebarItems = selectedSidebarKeys
+    .map((key) => settingsCatalogMap.get(key))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const availableSidebarItems = settingsCatalog.filter((item) => !selectedSidebarKeys.includes(item.key));
+
+  const buildSidebarConfig = (selectedKeys: BuiltinSettingsSidebarItemId[]): SettingsSidebarItemConfig[] => {
+    const selectedSet = new Set(selectedKeys);
+    return [
+      ...selectedKeys.map((id) => ({ id, visible: true })),
+      ...SETTINGS_SECTION_KEYS.filter((id) => !selectedSet.has(id)).map((id) => ({ id, visible: false })),
+    ];
   };
 
   return (
@@ -85,26 +167,21 @@ export function DisplaySettings() {
                   borderRadius: '50%',
                   backgroundColor: color,
                   cursor: 'pointer',
-                  border: settings.primary_color === color
-                    ? '2px solid currentColor'
-                    : '2px solid transparent',
-                  boxShadow: settings.primary_color === color
-                    ? `0 0 0 1px ${color}`
-                    : 'none',
+                  border: settings.primary_color === color ? '2px solid currentColor' : '2px solid transparent',
+                  boxShadow: settings.primary_color === color ? `0 0 0 1px ${color}` : 'none',
                   transition: 'all 0.2s',
                 }}
               />
             ))}
             <ColorPicker
               value={settings.primary_color}
-              onChangeComplete={(color) =>
-                saveSettings({ primary_color: color.toHexString() })
-              }
+              onChangeComplete={(color) => saveSettings({ primary_color: color.toHexString() })}
               size="small"
             />
           </div>
         </div>
       </SettingsGroup>
+
       <SettingsGroup title={t('settings.groupFontRadius')}>
         <div style={{ padding: '4px 0' }}>
           <span>{t('settings.fontSize')}</span>
@@ -135,10 +212,7 @@ export function DisplaySettings() {
             searchable
             value={settings.font_family || ''}
             onChange={(val) => saveSettings({ font_family: val })}
-            options={[
-              { label: t('settings.fontDefault'), value: '' },
-              ...systemFonts.map((f) => ({ label: f, value: f })),
-            ]}
+            options={[{ label: t('settings.fontDefault'), value: '' }, ...systemFonts.map((f) => ({ label: f, value: f }))]}
           />
         </div>
         <Divider style={{ margin: '4px 0' }} />
@@ -148,10 +222,7 @@ export function DisplaySettings() {
             searchable
             value={settings.code_font_family || ''}
             onChange={(val) => saveSettings({ code_font_family: val })}
-            options={[
-              { label: t('settings.fontDefault'), value: '' },
-              ...systemFonts.map((f) => ({ label: f, value: f })),
-            ]}
+            options={[{ label: t('settings.fontDefault'), value: '' }, ...systemFonts.map((f) => ({ label: f, value: f }))]}
           />
         </div>
         <Divider style={{ margin: '4px 0' }} />
@@ -186,79 +257,33 @@ export function DisplaySettings() {
           />
         </div>
       </SettingsGroup>
-      <SettingsGroup title={t('settings.customizeSettingsSidebar')}>
-        <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          {sidebarItems.map((item, index) => (
-            <div key={item.id} className="flex items-center justify-between gap-3" style={rowStyle}>
-              <Space size="small">
-                <Switch
-                  checked={item.visible}
-                  onChange={(visible) => {
-                    const next = sidebarItems.map((current) =>
-                      current.id === item.id ? { ...current, visible } : current,
-                    );
-                    updateSidebarItems(next);
-                  }}
-                />
-                <span>{t([`settings.${item.id}.title`, `settings.${item.id}`])}</span>
-              </Space>
-              <Space size="small">
-                <Button
-                  size="small"
-                  icon={<ArrowUp size={14} />}
-                  disabled={index === 0}
-                  onClick={() => updateSidebarItems(moveItem(sidebarItems, index, index - 1))}
-                />
-                <Button
-                  size="small"
-                  icon={<ArrowDown size={14} />}
-                  disabled={index === sidebarItems.length - 1}
-                  onClick={() => updateSidebarItems(moveItem(sidebarItems, index, index + 1))}
-                />
-              </Space>
-            </div>
-          ))}
-          <Button onClick={() => saveSettings({ settings_sidebar_items: DEFAULT_SETTINGS_SIDEBAR_ITEMS })}>
-            {t('common.reset')}
-          </Button>
-        </Space>
-      </SettingsGroup>
+
       <SettingsGroup title={t('settings.customizeTitlebarActions')}>
-        <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          {titlebarActions.map((item, index) => (
-            <div key={item.id} className="flex items-center justify-between gap-3" style={rowStyle}>
-              <Space size="small">
-                <Switch
-                  checked={item.visible}
-                  onChange={(visible) => {
-                    const next = titlebarActions.map((current) =>
-                      current.id === item.id ? { ...current, visible } : current,
-                    );
-                    updateTitlebarActions(next);
-                  }}
-                />
-                <span>{t(`settings.titlebarAction.${item.id}`)}</span>
-              </Space>
-              <Space size="small">
-                <Button
-                  size="small"
-                  icon={<ArrowUp size={14} />}
-                  disabled={index === 0}
-                  onClick={() => updateTitlebarActions(moveItem(titlebarActions, index, index - 1))}
-                />
-                <Button
-                  size="small"
-                  icon={<ArrowDown size={14} />}
-                  disabled={index === titlebarActions.length - 1}
-                  onClick={() => updateTitlebarActions(moveItem(titlebarActions, index, index + 1))}
-                />
-              </Space>
-            </div>
-          ))}
-          <Button onClick={() => saveSettings({ titlebar_quick_actions: DEFAULT_TITLEBAR_QUICK_ACTIONS })}>
-            {t('common.reset')}
-          </Button>
-        </Space>
+        <EntryShelfEditor
+          availableTitle={t('settings.entryShelf.available')}
+          selectedTitle={t('settings.entryShelf.selected')}
+          addLabel={t('settings.entryShelf.addToTitlebar')}
+          removeLabel={t('settings.entryShelf.remove')}
+          availableItems={availableTitlebarItems}
+          selectedItems={selectedTitlebarItems}
+          onAdd={(key) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig([...selectedTitlebarKeys, key as TitlebarShelfKey]) })}
+          onRemove={(key) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig(selectedTitlebarKeys.filter((current) => current !== key)) })}
+          onReorder={(keys) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig(keys as TitlebarShelfKey[]) })}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title={t('settings.customizeSettingsSidebar')}>
+        <EntryShelfEditor
+          availableTitle={t('settings.entryShelf.available')}
+          selectedTitle={t('settings.entryShelf.selected')}
+          addLabel={t('settings.entryShelf.addToSidebar')}
+          removeLabel={t('settings.entryShelf.remove')}
+          availableItems={availableSidebarItems}
+          selectedItems={selectedSidebarItems}
+          onAdd={(key) => saveSettings({ settings_sidebar_items: buildSidebarConfig([...selectedSidebarKeys, key as BuiltinSettingsSidebarItemId]) })}
+          onRemove={(key) => saveSettings({ settings_sidebar_items: buildSidebarConfig(selectedSidebarKeys.filter((current) => current !== key)) })}
+          onReorder={(keys) => saveSettings({ settings_sidebar_items: buildSidebarConfig(keys as BuiltinSettingsSidebarItemId[]) })}
+        />
       </SettingsGroup>
     </div>
   );

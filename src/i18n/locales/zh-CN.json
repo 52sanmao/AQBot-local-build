@@ -884,6 +884,18 @@
     "deleteFailedModelsSuccess": "已删除 {{count}} 个失败模型",
     "customizeSettingsSidebar": "自定义设置侧边栏",
     "customizeTitlebarActions": "自定义标题栏按钮",
+    "entryShelf": {
+      "available": "可加入组件",
+      "selected": "已显示组件",
+      "addToTitlebar": "加入标题栏",
+      "addToSidebar": "加入侧边栏",
+      "remove": "移除选中",
+      "builtinActionBadge": "内置按钮",
+      "settingsShortcutBadge": "设置页",
+      "builtinActionDescription": "现有标题栏内置按钮",
+      "settingsShortcutDescription": "从标题栏直接打开对应设置页",
+      "settingsSidebarDescription": "在左侧设置栏中显示该页面入口"
+    },
     "titlebarAction": {
       "pin": "窗口置顶",
       "theme": "主题切换",

@@ -355,10 +355,21 @@ export interface SettingsSidebarItemConfig {
   visible: boolean;
 }
 
-export interface TitlebarQuickActionConfig {
+export interface BuiltinTitlebarActionConfig {
+  kind: 'builtin-action';
   id: BuiltinTitlebarActionId;
   visible: boolean;
 }
+
+export interface SettingsTitlebarShortcutConfig {
+  kind: 'settings-section';
+  id: BuiltinSettingsSidebarItemId;
+  visible: boolean;
+}
+
+export type TitlebarQuickActionConfig =
+  | BuiltinTitlebarActionConfig
+  | SettingsTitlebarShortcutConfig;
 
 export interface AppSettings {
   language: string;

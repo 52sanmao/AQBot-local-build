@@ -5,12 +5,15 @@ import { Settings, XCircle, Sun, Moon, Monitor, Globe, Pin, PinOff, RotateCcw, C
 import { useTranslation } from 'react-i18next';
 import { useUIStore, useSettingsStore } from '@/stores';
 import { useBackupStore } from '@/stores/backupStore';
-import { DEFAULT_TITLEBAR_QUICK_ACTIONS } from '@/stores/settingsStore';
+import { normalizeTitlebarQuickActions } from '@/stores/settingsStore';
 import { isTauri, invoke } from '@/lib/invoke';
 import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
 import { useUpdateChecker } from '@/hooks/useUpdateChecker';
 import appLogo from '@/assets/image/logo.png';
-import type { BuiltinTitlebarActionId, TitlebarQuickActionConfig } from '@/types';
+import type {
+  BuiltinSettingsSidebarItemId,
+  TitlebarQuickActionConfig,
+} from '@/types';
 
 const IS_WINDOWS = navigator.userAgent.includes('Windows');
 
@@ -34,26 +37,8 @@ const THEME_ICONS: Record<string, React.ReactNode> = {
   dark: <Moon size={14} />,
 };
 
-const DEFAULT_TITLEBAR_ACTION_IDS: BuiltinTitlebarActionId[] = DEFAULT_TITLEBAR_QUICK_ACTIONS.map((item) => item.id);
-
-function resolveTitlebarActions(saved?: TitlebarQuickActionConfig[]): BuiltinTitlebarActionId[] {
-  const validIds = new Set<BuiltinTitlebarActionId>(DEFAULT_TITLEBAR_ACTION_IDS);
-  const savedItems = saved ?? DEFAULT_TITLEBAR_QUICK_ACTIONS;
-  const seen = new Set<BuiltinTitlebarActionId>();
-  const resolved: BuiltinTitlebarActionId[] = [];
-
-  for (const item of savedItems) {
-    if (!validIds.has(item.id)) continue;
-    seen.add(item.id);
-    if (item.visible) resolved.push(item.id);
-  }
-
-  for (const id of DEFAULT_TITLEBAR_ACTION_IDS) {
-    if (seen.has(id)) continue;
-    resolved.push(id);
-  }
-
-  return resolved.length > 0 ? resolved : DEFAULT_TITLEBAR_ACTION_IDS;
+function resolveTitlebarActions(saved?: TitlebarQuickActionConfig[]): TitlebarQuickActionConfig[] {
+  return normalizeTitlebarQuickActions(saved).filter((item) => item.visible);
 }
 
 import { LANG_OPTIONS } from '@/lib/constants';
@@ -66,6 +51,7 @@ export function TitleBar() {
   const activePage = useUIStore((s) => s.activePage);
   const enterSettings = useUIStore((s) => s.enterSettings);
   const exitSettings = useUIStore((s) => s.exitSettings);
+  const setSettingsSection = useUIStore((s) => s.setSettingsSection);
   const themeMode = useSettingsStore((s) => s.settings.theme_mode);
   const alwaysOnTop = useSettingsStore((s) => s.settings.always_on_top);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
@@ -132,6 +118,11 @@ export function TitleBar() {
       enterSettings();
     }
   };
+
+  const openSettingsSection = useCallback((section: BuiltinSettingsSidebarItemId) => {
+    enterSettings();
+    setSettingsSection(section);
+  }, [enterSettings, setSettingsSection]);
 
   const handleReload = useCallback(() => {
     modal.confirm({
@@ -713,7 +704,30 @@ export function TitleBar() {
             ),
           };
 
-          return resolvedTitlebarActions.map((actionId) => actionRenderers[actionId]);
+          return resolvedTitlebarActions.map((item) => {
+            if (item.kind === 'settings-section') {
+              return (
+                <Tooltip title={t([`settings.${item.id}.title`, `settings.${item.id}`])} key={`settings:${item.id}`}>
+                  <button
+                    aria-label={t([`settings.${item.id}.title`, `settings.${item.id}`])}
+                    onClick={() => openSettingsSection(item.id)}
+                    style={{
+                      ...buttonBase,
+                      width: 'auto',
+                      paddingInline: 12,
+                      color: token.colorTextSecondary,
+                      fontSize: 13,
+                    }}
+                    {...hoverHandlers(token.colorTextSecondary)}
+                  >
+                    {t([`settings.${item.id}.title`, `settings.${item.id}`])}
+                  </button>
+                </Tooltip>
+              );
+            }
+
+            return actionRenderers[item.id];
+          });
         })()}
       </div>
 

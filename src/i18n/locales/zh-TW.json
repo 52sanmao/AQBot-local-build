@@ -884,6 +884,18 @@
     "deleteFailedModelsSuccess": "已刪除 {{count}} 個失敗模型",
     "customizeSettingsSidebar": "自訂設定側邊欄",
     "customizeTitlebarActions": "自訂標題列按鈕",
+    "entryShelf": {
+      "available": "可加入元件",
+      "selected": "已顯示元件",
+      "addToTitlebar": "加入標題列",
+      "addToSidebar": "加入側邊欄",
+      "remove": "移除選取",
+      "builtinActionBadge": "內建按鈕",
+      "settingsShortcutBadge": "設定頁",
+      "builtinActionDescription": "現有標題列內建按鈕",
+      "settingsShortcutDescription": "從標題列直接開啟對應設定頁",
+      "settingsSidebarDescription": "在左側設定欄顯示該頁面入口"
+    },
     "titlebarAction": {
       "pin": "視窗置頂",
       "theme": "主題切換",

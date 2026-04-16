@@ -884,6 +884,18 @@
     "deleteFailedModelsSuccess": "Deleted {{count}} failed models",
     "customizeSettingsSidebar": "Customize settings sidebar",
     "customizeTitlebarActions": "Customize titlebar actions",
+    "entryShelf": {
+      "available": "Available items",
+      "selected": "Selected items",
+      "addToTitlebar": "Add to titlebar",
+      "addToSidebar": "Add to sidebar",
+      "remove": "Remove selected",
+      "builtinActionBadge": "Built-in",
+      "settingsShortcutBadge": "Settings page",
+      "builtinActionDescription": "Existing titlebar action button",
+      "settingsShortcutDescription": "Open the matching settings section from the titlebar",
+      "settingsSidebarDescription": "Show this settings page in the left sidebar"
+    },
     "titlebarAction": {
       "pin": "Always on top",
       "theme": "Theme switcher",
