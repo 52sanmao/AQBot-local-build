@@ -18,7 +18,7 @@ const saveModels = vi.fn();
 const testModel = vi.fn();
 const setSelectedProviderId = vi.fn();
 
-let provider = {
+let provider: any = {
   id: 'provider-1',
   name: 'OpenAI',
   provider_type: 'openai',
