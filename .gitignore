@@ -50,5 +50,6 @@ website/docs/.vitepress/dist/
 fix/
 autoresearch-*.json
 research-*.tsv
+.autoresearch/
 
 debug/*
