@@ -887,7 +887,18 @@
     "batchEditTitle": "Batch Edit ({{count}} models)",
     "batchEditHint": "Toggle on the options you want to apply to all selected models",
     "batchApply": "Apply",
-    "batchEditSuccess": "Updated settings for {{count}} models"
+    "batchEditSuccess": "Updated settings for {{count}} models",
+    "keyRemarkOptional": "Key remark (optional)",
+    "deleteFailedModels": "Delete failed models",
+    "deleteFailedModelsConfirm": "Delete the models marked as failed in the latest test run?",
+    "deleteFailedModelsSuccess": "Deleted {{count}} failed models",
+    "titlebarSettingsShortcuts": "Titlebar settings shortcuts",
+    "entryShelf": {
+      "allSettingsEntries": "Settings entries",
+      "selectedOrder": "Shown order",
+      "selectedBadge": "Shown",
+      "settingsShortcutDescription": "Click a chip to add or remove a settings shortcut in the titlebar."
+    }
   },
   "backup": {
     "title": "Backup Center",
@@ -1019,7 +1030,8 @@
     "deny": "Deny",
     "approved": "Approved",
     "denied": "Denied",
-    "expired": "Expired (Agent disconnected)"
+    "expired": "Expired (Agent disconnected)",
+    "clearSelection": "Clear selection"
   },
   "image": {
     "loadError": "Image failed to load",

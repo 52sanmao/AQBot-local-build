@@ -1205,6 +1205,7 @@ mod tests {
             &provider.id,
             &encrypt_key("upstream-secret", &master_key).unwrap(),
             &key_prefix("upstream-secret"),
+            None,
         )
         .await
         .unwrap();
@@ -1266,6 +1267,7 @@ mod tests {
                 &provider.id,
                 &encrypt_key("upstream-secret", master_key).unwrap(),
                 &key_prefix("upstream-secret"),
+                None,
             )
             .await
             .unwrap();

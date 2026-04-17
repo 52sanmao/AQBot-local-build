@@ -28,6 +28,7 @@ export interface ProviderKey {
   last_validated_at: number | null;
   last_error: string | null;
   rotation_index: number;
+  remark: string | null;
   created_at: number;
 }
 
@@ -330,6 +331,47 @@ export interface GatewaySettings {
 }
 
 // === Settings ===
+export type BuiltinSettingsSidebarItemId =
+  | 'general'
+  | 'display'
+  | 'providers'
+  | 'conversationSettings'
+  | 'defaultModel'
+  | 'searchProviders'
+  | 'mcpServers'
+  | 'proxy'
+  | 'shortcuts'
+  | 'data'
+  | 'storage'
+  | 'backup'
+  | 'about';
+
+export type BuiltinTitlebarActionId =
+  | 'pin'
+  | 'theme'
+  | 'language'
+  | 'backup'
+  | 'github'
+  | 'update'
+  | 'reload'
+  | 'settings';
+
+export interface BuiltinTitlebarActionConfig {
+  kind: 'builtin-action';
+  id: BuiltinTitlebarActionId;
+  visible: boolean;
+}
+
+export interface SettingsTitlebarShortcutConfig {
+  kind: 'settings-section';
+  id: BuiltinSettingsSidebarItemId;
+  visible: boolean;
+}
+
+export type TitlebarQuickActionConfig =
+  | BuiltinTitlebarActionConfig
+  | SettingsTitlebarShortcutConfig;
+
 export interface AppSettings {
   language: string;
   theme_mode: string;
@@ -427,6 +469,7 @@ export interface AppSettings {
   multi_model_display_mode?: 'tabs' | 'side-by-side' | 'stacked';
   /** Render user messages as Markdown (like AI messages). Default: false */
   render_user_markdown?: boolean;
+  titlebar_quick_actions?: TitlebarQuickActionConfig[];
 }
 
 // === Streaming ===

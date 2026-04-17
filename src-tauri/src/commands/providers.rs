@@ -64,6 +64,7 @@ pub async fn add_provider_key(
     state: State<'_, AppState>,
     provider_id: String,
     raw_key: String,
+    remark: Option<String>,
 ) -> Result<ProviderKey, String> {
     let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &provider_id)
         .await
@@ -75,7 +76,13 @@ pub async fn add_provider_key(
     } else {
         raw_key.clone()
     };
-    aqbot_core::repo::provider::add_provider_key(&state.sea_db, &real_id, &encrypted, &prefix)
+    aqbot_core::repo::provider::add_provider_key(
+        &state.sea_db,
+        &real_id,
+        &encrypted,
+        &prefix,
+        remark,
+    )
         .await
         .map_err(|e| e.to_string())
 }

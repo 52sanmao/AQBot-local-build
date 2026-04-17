@@ -167,12 +167,19 @@ async fn test_provider_key_operations() {
     .unwrap();
 
     // add key
-    let key = provider::add_provider_key(db, &prov.id, "enc_key_data", "sk-abc")
+    let key = provider::add_provider_key(
+        db,
+        &prov.id,
+        "enc_key_data",
+        "sk-abc",
+        Some("Primary key".into()),
+    )
         .await
         .unwrap();
     assert_eq!(key.provider_id, prov.id);
     assert_eq!(key.key_prefix, "sk-abc");
     assert!(key.enabled);
+    assert_eq!(key.remark.as_deref(), Some("Primary key"));
 
     // list keys
     let keys = provider::list_keys_for_provider(db, &prov.id)

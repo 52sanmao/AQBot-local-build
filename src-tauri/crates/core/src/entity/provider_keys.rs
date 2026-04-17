@@ -13,6 +13,7 @@ pub struct Model {
     pub last_validated_at: Option<i64>,
     pub last_error: Option<String>,
     pub rotation_index: i32,
+    pub remark: Option<String>,
     pub created_at: i64,
 }
 

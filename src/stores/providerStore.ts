@@ -19,7 +19,7 @@ interface ProviderState {
   deleteProvider: (id: string) => Promise<void>;
   toggleProvider: (id: string, enabled: boolean) => Promise<void>;
   reorderProviders: (providerIds: string[]) => Promise<void>;
-  addProviderKey: (providerId: string, rawKey: string) => Promise<void>;
+  addProviderKey: (providerId: string, rawKey: string, remark?: string | null) => Promise<void>;
   updateProviderKey: (keyId: string, rawKey: string) => Promise<void>;
   deleteProviderKey: (keyId: string) => Promise<void>;
   toggleProviderKey: (keyId: string, enabled: boolean) => Promise<void>;
@@ -124,11 +124,12 @@ export const useProviderStore = create<ProviderState>((set) => ({
     }
   },
 
-  addProviderKey: async (providerId, rawKey) => {
+  addProviderKey: async (providerId, rawKey, remark) => {
     try {
       const key = await invoke<ProviderKey>('add_provider_key', {
         providerId,
         rawKey,
+        remark,
       });
       set((s) => ({
         providers: s.providers.map((p) =>

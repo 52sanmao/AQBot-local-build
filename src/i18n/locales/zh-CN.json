@@ -887,7 +887,18 @@
     "batchEditTitle": "批量编辑 ({{count}} 个模型)",
     "batchEditHint": "开启右侧开关的选项将被应用到所有选中的模型",
     "batchApply": "应用",
-    "batchEditSuccess": "已更新 {{count}} 个模型的设置"
+    "batchEditSuccess": "已更新 {{count}} 个模型的设置",
+    "keyRemarkOptional": "????????",
+    "deleteFailedModels": "??????",
+    "deleteFailedModelsConfirm": "?????????????????????",
+    "deleteFailedModelsSuccess": "??? {{count}} ?????",
+    "titlebarSettingsShortcuts": "?????????",
+    "entryShelf": {
+      "allSettingsEntries": "????????",
+      "selectedOrder": "???????",
+      "selectedBadge": "???",
+      "settingsShortcutDescription": "????????????????????"
+    }
   },
   "backup": {
     "title": "备份中心",
@@ -1019,7 +1030,8 @@
     "deny": "拒绝",
     "approved": "已批准",
     "denied": "已拒绝",
-    "expired": "已过期（Agent 已断开）"
+    "expired": "已过期（Agent 已断开）",
+    "clearSelection": "????"
   },
   "image": {
     "loadError": "图片加载失败",

@@ -1,18 +1,24 @@
-import { useCallback, useRef, useEffect, useState } from 'react';
+import { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import { Dropdown, Tooltip, App, theme, Popover, Divider, Typography, Space, Spin } from 'antd';
 import type { MenuProps } from 'antd';
 import { Settings, XCircle, Sun, Moon, Monitor, Globe, Pin, PinOff, RotateCcw, CloudUpload, Github, Star, MessageSquarePlus, Bug, ArrowDownCircle, Minus, X, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore, useSettingsStore } from '@/stores';
 import { useBackupStore } from '@/stores/backupStore';
+import { normalizeTitlebarQuickActions } from '@/stores/settingsStore';
 import { isTauri, invoke } from '@/lib/invoke';
 import { getShortcutBinding, formatShortcutForDisplay } from '@/lib/shortcuts';
 import { useUpdateChecker } from '@/hooks/useUpdateChecker';
+import { SETTINGS_SECTION_ICONS } from '@/components/settings/settingsSectionMeta';
 import appLogo from '@/assets/image/logo.png';
+import type {
+  BuiltinTitlebarActionId,
+  BuiltinSettingsSidebarItemId,
+  TitlebarQuickActionConfig,
+} from '@/types';
 
 const IS_WINDOWS = navigator.userAgent.includes('Windows');
 
-/** Standard Windows "restore down" icon: two overlapping rectangles */
 const RestoreIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2">
     <rect x="3" y="5" width="8" height="7" rx="0.5" />
@@ -32,8 +38,11 @@ const THEME_ICONS: Record<string, React.ReactNode> = {
   dark: <Moon size={14} />,
 };
 
-import { LANG_OPTIONS } from '@/lib/constants';
+function resolveTitlebarActions(saved?: TitlebarQuickActionConfig[]): TitlebarQuickActionConfig[] {
+  return normalizeTitlebarQuickActions(saved).filter((item) => item.visible);
+}
 
+import { LANG_OPTIONS } from '@/lib/constants';
 
 export function TitleBar() {
   const { t, i18n } = useTranslation();
@@ -42,10 +51,15 @@ export function TitleBar() {
   const activePage = useUIStore((s) => s.activePage);
   const enterSettings = useUIStore((s) => s.enterSettings);
   const exitSettings = useUIStore((s) => s.exitSettings);
+  const setSettingsSection = useUIStore((s) => s.setSettingsSection);
   const themeMode = useSettingsStore((s) => s.settings.theme_mode);
   const alwaysOnTop = useSettingsStore((s) => s.settings.always_on_top);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
   const settings = useSettingsStore((s) => s.settings);
+  const resolvedTitlebarActions = useMemo(
+    () => resolveTitlebarActions(settings.titlebar_quick_actions),
+    [settings.titlebar_quick_actions],
+  );
 
   const isInSettings = activePage === 'settings';
   const [pinned, setPinned] = useState(alwaysOnTop ?? false);
@@ -105,6 +119,11 @@ export function TitleBar() {
     }
   };
 
+  const openSettingsSection = useCallback((section: BuiltinSettingsSidebarItemId) => {
+    enterSettings();
+    setSettingsSection(section);
+  }, [enterSettings, setSettingsSection]);
+
   const handleReload = useCallback(() => {
     modal.confirm({
       title: t('desktop.reloadConfirmTitle'),
@@ -117,7 +136,6 @@ export function TitleBar() {
     });
   }, [modal, t]);
 
-  // Windows window controls
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -147,15 +165,12 @@ export function TitleBar() {
     await getCurrentWindow().close();
   }, []);
 
-  // Quick Backup state
   const [backupPopoverOpen, setBackupPopoverOpen] = useState(false);
   const [backingUp, setBackingUp] = useState<'local' | 'webdav' | null>(null);
   const [lastLocalBackup, setLastLocalBackup] = useState<string | null>(null);
   const [lastWebDavSync, setLastWebDavSync] = useState<string | null>(null);
-  // Timestamps (ms) for next scheduled backups
   const [nextLocalTs, setNextLocalTs] = useState<number | null>(null);
   const [nextWebDavTs, setNextWebDavTs] = useState<number | null>(null);
-  // Live countdown strings (updated every second)
   const [countdownText, setCountdownText] = useState<string | null>(null);
   const [popoverLocalCountdown, setPopoverLocalCountdown] = useState<string | null>(null);
   const [popoverWebDavCountdown, setPopoverWebDavCountdown] = useState<string | null>(null);
@@ -171,7 +186,6 @@ export function TitleBar() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Fetch backup info on mount and when popover opens
   useEffect(() => {
     loadBackupSettings();
 
@@ -190,15 +204,13 @@ export function TitleBar() {
       .then((list) => {
         if (list.length > 0) {
           const raw = list[0].createdAt;
-          const d = new Date(raw.includes('T') || raw.includes('Z') ? raw : raw + 'Z');
+          const d = new Date(raw.includes('T') || raw.includes('Z') ? raw : `${raw}Z`);
           if (!Number.isNaN(d.getTime())) setLastLocalBackup(d.toLocaleString());
         }
       })
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backupPopoverOpen]);
+  }, [backupPopoverOpen, loadBackupSettings]);
 
-  // Calculate next WebDAV sync timestamp (re-run when settings or lastWebDavSync change)
   useEffect(() => {
     if (!lastWebDavSync) {
       setNextWebDavTs(null);
@@ -210,7 +222,6 @@ export function TitleBar() {
     if (settings.webdav_sync_enabled && interval > 0) {
       const intervalMs = interval * 60000;
       let next = d.getTime() + intervalMs;
-      // If overdue, advance to the next future interval
       while (next < Date.now()) {
         next += intervalMs;
       }
@@ -220,7 +231,6 @@ export function TitleBar() {
     }
   }, [settings.webdav_sync_enabled, settings.webdav_sync_interval_minutes, lastWebDavSync]);
 
-  // Calculate next local backup timestamp from backup settings
   useEffect(() => {
     if (!backupSettings?.enabled) {
       setNextLocalTs(null);
@@ -231,7 +241,6 @@ export function TitleBar() {
       const lastTime = new Date(lastLocalBackup).getTime();
       if (!Number.isNaN(lastTime)) {
         let next = lastTime + intervalMs;
-        // If overdue, advance to the next future interval
         while (next < Date.now()) {
           next += intervalMs;
         }
@@ -239,26 +248,16 @@ export function TitleBar() {
         return;
       }
     }
-    // No previous backup — next backup at now + interval
     setNextLocalTs(Date.now() + intervalMs);
   }, [backupSettings, lastLocalBackup]);
 
-  // Live countdown on button — tick every second while any backup is scheduled
   useEffect(() => {
     const tick = () => {
       const now = Date.now();
       let soonest: number | null = null;
-      if (nextLocalTs) {
-        if (!soonest || nextLocalTs < soonest) soonest = nextLocalTs;
-      }
-      if (nextWebDavTs) {
-        if (!soonest || nextWebDavTs < soonest) soonest = nextWebDavTs;
-      }
-      if (soonest) {
-        setCountdownText(fmtCountdown(soonest - now));
-      } else {
-        setCountdownText(null);
-      }
+      if (nextLocalTs && (!soonest || nextLocalTs < soonest)) soonest = nextLocalTs;
+      if (nextWebDavTs && (!soonest || nextWebDavTs < soonest)) soonest = nextWebDavTs;
+      setCountdownText(soonest ? fmtCountdown(soonest - now) : null);
     };
 
     tick();
@@ -266,21 +265,20 @@ export function TitleBar() {
     return () => clearInterval(id);
   }, [nextLocalTs, nextWebDavTs]);
 
-  // Live countdown in popover — tick every second only when open
   useEffect(() => {
     if (!backupPopoverOpen) return;
     const tick = () => {
       const now = Date.now();
-      if (nextLocalTs && nextLocalTs > now) {
-        setPopoverLocalCountdown(`${new Date(nextLocalTs).toLocaleString()} (${fmtCountdown(nextLocalTs - now)})`);
-      } else {
-        setPopoverLocalCountdown(null);
-      }
-      if (nextWebDavTs && nextWebDavTs > now) {
-        setPopoverWebDavCountdown(`${new Date(nextWebDavTs).toLocaleString()} (${fmtCountdown(nextWebDavTs - now)})`);
-      } else {
-        setPopoverWebDavCountdown(null);
-      }
+      setPopoverLocalCountdown(
+        nextLocalTs && nextLocalTs > now
+          ? `${new Date(nextLocalTs).toLocaleString()} (${fmtCountdown(nextLocalTs - now)})`
+          : null,
+      );
+      setPopoverWebDavCountdown(
+        nextWebDavTs && nextWebDavTs > now
+          ? `${new Date(nextWebDavTs).toLocaleString()} (${fmtCountdown(nextWebDavTs - now)})`
+          : null,
+      );
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -306,22 +304,10 @@ export function TitleBar() {
 
   const GITHUB_REPO = 'https://github.com/AQBot-Desktop/AQBot';
   const githubMenuItems: MenuProps['items'] = [
-    {
-      key: 'feature',
-      icon: <MessageSquarePlus size={14} />,
-      label: t('titlebar.submitFeature'),
-    },
-    {
-      key: 'bug',
-      icon: <Bug size={14} />,
-      label: t('titlebar.submitBug'),
-    },
+    { key: 'feature', icon: <MessageSquarePlus size={14} />, label: t('titlebar.submitFeature') },
+    { key: 'bug', icon: <Bug size={14} />, label: t('titlebar.submitBug') },
     { type: 'divider' },
-    {
-      key: 'star',
-      icon: <Star size={14} />,
-      label: t('titlebar.giveStar'),
-    },
+    { key: 'star', icon: <Star size={14} />, label: t('titlebar.giveStar') },
   ];
   const handleGithubClick: MenuProps['onClick'] = ({ key }) => {
     let url = GITHUB_REPO;
@@ -334,7 +320,6 @@ export function TitleBar() {
     }
   };
 
-  // Pre-load Tauri window module for synchronous drag calls
   const tauriWindowRef = useRef<typeof import('@tauri-apps/api/window') | null>(null);
   useEffect(() => {
     if (isTauri()) {
@@ -354,9 +339,6 @@ export function TitleBar() {
     e.preventDefault();
 
     if (IS_WINDOWS) {
-      // Delay startDragging slightly so double-click can be detected.
-      // If a second mousedown arrives within the threshold,
-      // the onDoubleClick handler fires and cancels the pending drag.
       if (dragTimerRef.current) clearTimeout(dragTimerRef.current);
       dragTimerRef.current = setTimeout(() => {
         mod.getCurrentWindow().startDragging();
@@ -399,6 +381,20 @@ export function TitleBar() {
     },
   });
 
+  const titlebarChipBase: React.CSSProperties = {
+    width: 30,
+    height: 30,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    backgroundColor: token.colorBgContainer,
+    color: token.colorTextSecondary,
+    cursor: 'pointer',
+    padding: 0,
+  };
+
   return (
     <div
       className="title-bar-drag"
@@ -417,7 +413,6 @@ export function TitleBar() {
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      {/* Left: App icon + name (Windows only) */}
       {IS_WINDOWS ? (
         <div className="title-bar-nodrag" style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}>
           <img src={appLogo} alt="AQBot" style={{ width: 18, height: 18 }} draggable={false} />
@@ -426,315 +421,282 @@ export function TitleBar() {
       ) : <div />}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-      <div className="title-bar-nodrag" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {/* Pin Toggle */}
-        <Tooltip title={t('desktop.alwaysOnTop')}>
-          <button
-            onClick={handlePinToggle}
-            style={{
-              ...buttonBase,
-              color: pinned ? token.colorPrimary : token.colorTextSecondary,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = pinned
-                ? token.colorPrimaryBg
-                : token.colorFillSecondary;
-              e.currentTarget.style.color = pinned
-                ? token.colorPrimary
-                : token.colorTextBase;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = pinned
-                ? token.colorPrimary
-                : token.colorTextSecondary;
-            }}
-          >
-            {pinned ? <Pin size={14} /> : <PinOff size={14} />}
-          </button>
-        </Tooltip>
-
-        {/* Theme Dropdown */}
-        <Dropdown
-          menu={{ items: themeMenuItems, onClick: handleThemeChange, selectedKeys: [themeMode] }}
-          trigger={['click']}
-          placement="bottomRight"
-          destroyOnHidden
-        >
-          <button
-            style={{ ...buttonBase, color: token.colorTextSecondary }}
-            {...hoverHandlers(token.colorTextSecondary)}
-          >
-            {THEME_ICONS[themeMode] ?? <Monitor size={14} />}
-          </button>
-        </Dropdown>
-
-        {/* Language Dropdown */}
-        <Dropdown
-          menu={{ items: langMenuItems, onClick: handleLangChange, selectedKeys: [i18n.language] }}
-          trigger={['click']}
-          placement="bottomRight"
-          destroyOnHidden
-        >
-          <button
-            style={{ ...buttonBase, color: token.colorTextSecondary }}
-            {...hoverHandlers(token.colorTextSecondary)}
-          >
-            <Globe size={14} />
-          </button>
-        </Dropdown>
-
-        {/* Quick Backup */}
-        <Popover
-          open={backupPopoverOpen}
-          onOpenChange={setBackupPopoverOpen}
-          trigger="click"
-          placement="bottomRight"
-          destroyTooltipOnHide
-          content={
-            <div style={{ width: 240 }}>
-              <Typography.Text strong style={{ fontSize: 13 }}>
-                {t('titlebar.lastBackup')}
-              </Typography.Text>
-              <Space direction="vertical" size={2} style={{ width: '100%', marginTop: 4 }}>
-                {lastLocalBackup && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {t('titlebar.lastLocal')}: {lastLocalBackup}
-                  </Typography.Text>
-                )}
-                {lastWebDavSync && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    WebDAV: {lastWebDavSync}
-                  </Typography.Text>
-                )}
-                {!lastLocalBackup && !lastWebDavSync && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {t('titlebar.noBackupYet')}
-                  </Typography.Text>
-                )}
-              </Space>
-
-              {(popoverLocalCountdown || popoverWebDavCountdown) && (
-                <>
-                  <Divider style={{ margin: '6px 0' }} />
-                  <Typography.Text strong style={{ fontSize: 13 }}>
-                    {t('titlebar.nextBackup')}
-                  </Typography.Text>
-                  <Space direction="vertical" size={2} style={{ width: '100%', marginTop: 4 }}>
-                    {popoverLocalCountdown && (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {t('titlebar.lastLocal')}: {popoverLocalCountdown}
-                      </Typography.Text>
-                    )}
-                    {popoverWebDavCountdown && (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        WebDAV: {popoverWebDavCountdown}
-                      </Typography.Text>
-                    )}
-                  </Space>
-                </>
-              )}
-
-              <Divider style={{ margin: '6px 0' }} />
-              <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                <button
-                  onClick={() => handleQuickBackup('local')}
-                  disabled={backingUp !== null}
-                  style={{
-                    width: '100%',
-                    padding: '4px 8px',
-                    borderRadius: token.borderRadius,
-                    border: `1px solid ${token.colorBorder}`,
-                    backgroundColor: 'transparent',
-                    cursor: backingUp ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    color: token.colorText,
-                  }}
+        <div className="title-bar-nodrag" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {(() => {
+            const actionRenderers: Record<BuiltinTitlebarActionId, React.ReactNode> = {
+              pin: (
+                <Tooltip title={t('desktop.alwaysOnTop')} key="pin">
+                  <button
+                    aria-label={t('desktop.alwaysOnTop')}
+                    onClick={handlePinToggle}
+                    style={{ ...buttonBase, color: pinned ? token.colorPrimary : token.colorTextSecondary }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = pinned ? token.colorPrimaryBg : token.colorFillSecondary;
+                      e.currentTarget.style.color = pinned ? token.colorPrimary : token.colorTextBase;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = pinned ? token.colorPrimary : token.colorTextSecondary;
+                    }}
+                  >
+                    {pinned ? <Pin size={14} /> : <PinOff size={14} />}
+                  </button>
+                </Tooltip>
+              ),
+              theme: (
+                <Dropdown
+                  key="theme"
+                  menu={{ items: themeMenuItems, onClick: handleThemeChange, selectedKeys: [themeMode] }}
+                  trigger={['click']}
+                  placement="bottomRight"
+                  destroyOnHidden
                 >
-                  {backingUp === 'local' ? <Spin size="small" /> : <CloudUpload size={14} />}
-                  {t('titlebar.localBackup')}
-                </button>
-                <button
-                  onClick={() => handleQuickBackup('webdav')}
-                  disabled={backingUp !== null}
-                  style={{
-                    width: '100%',
-                    padding: '4px 8px',
-                    borderRadius: token.borderRadius,
-                    border: `1px solid ${token.colorBorder}`,
-                    backgroundColor: 'transparent',
-                    cursor: backingUp ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    color: token.colorText,
-                  }}
+                  <button
+                    aria-label={t('settings.theme')}
+                    style={{ ...buttonBase, color: token.colorTextSecondary }}
+                    {...hoverHandlers(token.colorTextSecondary)}
+                  >
+                    {THEME_ICONS[themeMode] ?? <Monitor size={14} />}
+                  </button>
+                </Dropdown>
+              ),
+              language: (
+                <Dropdown
+                  key="language"
+                  menu={{ items: langMenuItems, onClick: handleLangChange, selectedKeys: [i18n.language] }}
+                  trigger={['click']}
+                  placement="bottomRight"
+                  destroyOnHidden
                 >
-                  {backingUp === 'webdav' ? <Spin size="small" /> : <CloudUpload size={14} />}
-                  {t('titlebar.webdavBackup')}
-                </button>
-              </Space>
-            </div>
-          }
-        >
-          <Tooltip title={t('titlebar.quickBackup')}>
-            <button
-              style={{
-                ...buttonBase,
-                color: countdownText ? token.colorPrimary : token.colorTextSecondary,
-                width: countdownText ? 'auto' : 28,
-                paddingInline: countdownText ? 4 : 0,
-                gap: 2,
-                fontSize: 11,
-              }}
-              {...hoverHandlers(countdownText ? token.colorPrimary : token.colorTextSecondary)}
-            >
-              <CloudUpload size={14} />
-              {countdownText && <span>({countdownText})</span>}
-            </button>
-          </Tooltip>
-        </Popover>
+                  <button
+                    aria-label={t('settings.language')}
+                    style={{ ...buttonBase, color: token.colorTextSecondary }}
+                    {...hoverHandlers(token.colorTextSecondary)}
+                  >
+                    <Globe size={14} />
+                  </button>
+                </Dropdown>
+              ),
+              backup: (
+                <Popover
+                  key="backup"
+                  open={backupPopoverOpen}
+                  onOpenChange={setBackupPopoverOpen}
+                  trigger="click"
+                  placement="bottomRight"
+                  destroyTooltipOnHide
+                  content={(
+                    <div style={{ width: 240 }}>
+                      <Typography.Text strong style={{ fontSize: 13 }}>{t('titlebar.lastBackup')}</Typography.Text>
+                      <Space direction="vertical" size={2} style={{ width: '100%', marginTop: 4 }}>
+                        {lastLocalBackup && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('titlebar.lastLocal')}: {lastLocalBackup}</Typography.Text>}
+                        {lastWebDavSync && <Typography.Text type="secondary" style={{ fontSize: 12 }}>WebDAV: {lastWebDavSync}</Typography.Text>}
+                        {!lastLocalBackup && !lastWebDavSync && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('titlebar.noBackupYet')}</Typography.Text>}
+                      </Space>
 
-        {/* GitHub */}
-        <Dropdown
-          menu={{ items: githubMenuItems, onClick: handleGithubClick }}
-          trigger={['click']}
-          placement="bottomRight"
-          destroyOnHidden
-        >
-          <button
-            style={{ ...buttonBase, color: token.colorTextSecondary }}
-            {...hoverHandlers(token.colorTextSecondary)}
-          >
-            <Github size={14} />
-          </button>
-        </Dropdown>
+                      {(popoverLocalCountdown || popoverWebDavCountdown) && (
+                        <>
+                          <Divider style={{ margin: '6px 0' }} />
+                          <Typography.Text strong style={{ fontSize: 13 }}>{t('titlebar.nextBackup')}</Typography.Text>
+                          <Space direction="vertical" size={2} style={{ width: '100%', marginTop: 4 }}>
+                            {popoverLocalCountdown && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('titlebar.lastLocal')}: {popoverLocalCountdown}</Typography.Text>}
+                            {popoverWebDavCountdown && <Typography.Text type="secondary" style={{ fontSize: 12 }}>WebDAV: {popoverWebDavCountdown}</Typography.Text>}
+                          </Space>
+                        </>
+                      )}
 
-        {/* Check Update */}
-        {isTauri() && (
-          <Tooltip title={t('settings.checkUpdate')}>
-            <button
-              onClick={handleCheckUpdate}
-              disabled={checkingUpdate}
-              style={{ ...buttonBase, color: token.colorTextSecondary, opacity: checkingUpdate ? 0.5 : 1 }}
-              {...hoverHandlers(token.colorTextSecondary)}
-            >
-              {checkingUpdate ? <Spin size="small" /> : <ArrowDownCircle size={14} />}
-            </button>
-          </Tooltip>
-        )}
+                      <Divider style={{ margin: '6px 0' }} />
+                      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                        <button
+                          onClick={() => handleQuickBackup('local')}
+                          disabled={backingUp !== null}
+                          style={{
+                            width: '100%',
+                            padding: '4px 8px',
+                            borderRadius: token.borderRadius,
+                            border: `1px solid ${token.colorBorder}`,
+                            backgroundColor: 'transparent',
+                            cursor: backingUp ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            color: token.colorText,
+                          }}
+                        >
+                          {backingUp === 'local' ? <Spin size="small" /> : <CloudUpload size={14} />}
+                          {t('titlebar.localBackup')}
+                        </button>
+                        <button
+                          onClick={() => handleQuickBackup('webdav')}
+                          disabled={backingUp !== null}
+                          style={{
+                            width: '100%',
+                            padding: '4px 8px',
+                            borderRadius: token.borderRadius,
+                            border: `1px solid ${token.colorBorder}`,
+                            backgroundColor: 'transparent',
+                            cursor: backingUp ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            color: token.colorText,
+                          }}
+                        >
+                          {backingUp === 'webdav' ? <Spin size="small" /> : <CloudUpload size={14} />}
+                          {t('titlebar.webdavBackup')}
+                        </button>
+                      </Space>
+                    </div>
+                  )}
+                >
+                  <Tooltip title={t('titlebar.quickBackup')}>
+                    <button
+                      aria-label={t('titlebar.quickBackup')}
+                      style={{
+                        ...buttonBase,
+                        color: countdownText ? token.colorPrimary : token.colorTextSecondary,
+                        width: countdownText ? 'auto' : 28,
+                        paddingInline: countdownText ? 4 : 0,
+                        gap: 2,
+                        fontSize: 11,
+                      }}
+                      {...hoverHandlers(countdownText ? token.colorPrimary : token.colorTextSecondary)}
+                    >
+                      <CloudUpload size={14} />
+                      {countdownText && <span>({countdownText})</span>}
+                    </button>
+                  </Tooltip>
+                </Popover>
+              ),
+              github: (
+                <Dropdown
+                  key="github"
+                  menu={{ items: githubMenuItems, onClick: handleGithubClick }}
+                  trigger={['click']}
+                  placement="bottomRight"
+                  destroyOnHidden
+                >
+                  <button
+                    aria-label="GitHub"
+                    style={{ ...buttonBase, color: token.colorTextSecondary }}
+                    {...hoverHandlers(token.colorTextSecondary)}
+                  >
+                    <Github size={14} />
+                  </button>
+                </Dropdown>
+              ),
+              update: isTauri() ? (
+                <Tooltip title={t('settings.checkUpdate')} key="update">
+                  <button
+                    aria-label={t('settings.checkUpdate')}
+                    onClick={handleCheckUpdate}
+                    disabled={checkingUpdate}
+                    style={{ ...buttonBase, color: token.colorTextSecondary, opacity: checkingUpdate ? 0.5 : 1 }}
+                    {...hoverHandlers(token.colorTextSecondary)}
+                  >
+                    {checkingUpdate ? <Spin size="small" /> : <ArrowDownCircle size={14} />}
+                  </button>
+                </Tooltip>
+              ) : null,
+              reload: (
+                <Tooltip title={t('desktop.reloadPage')} key="reload">
+                  <button
+                    aria-label={t('desktop.reloadPage')}
+                    onClick={handleReload}
+                    style={{ ...buttonBase, color: token.colorTextSecondary }}
+                    {...hoverHandlers(token.colorTextSecondary)}
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                </Tooltip>
+              ),
+              settings: (
+                <Tooltip
+                  key="settings"
+                  title={`${isInSettings ? t('settings.closeSettings') : t('settings.openSettings')} (${formatShortcutForDisplay(getShortcutBinding(settings, 'openSettings'))})`}
+                >
+                  <button
+                    aria-label={isInSettings ? t('settings.closeSettings') : t('settings.openSettings')}
+                    onClick={(e) => {
+                      handleSettingsToggle();
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.blur();
+                    }}
+                    style={{ ...buttonBase, color: isInSettings ? token.colorError : token.colorTextSecondary }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = isInSettings ? token.colorErrorBg : token.colorFillSecondary;
+                      e.currentTarget.style.color = isInSettings ? token.colorError : token.colorTextBase;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = isInSettings ? token.colorError : token.colorTextSecondary;
+                    }}
+                  >
+                    {isInSettings ? <XCircle size={14} /> : <Settings size={14} />}
+                  </button>
+                </Tooltip>
+              ),
+            };
 
-        {/* Reload Page */}
-        <Tooltip title={t('desktop.reloadPage')}>
-          <button
-            onClick={handleReload}
-            style={{ ...buttonBase, color: token.colorTextSecondary }}
-            {...hoverHandlers(token.colorTextSecondary)}
-          >
-            <RotateCcw size={14} />
-          </button>
-        </Tooltip>
+            return resolvedTitlebarActions.map((item) => {
+              if (item.kind === 'settings-section') {
+                const label = t([`settings.${item.id}.title`, `settings.${item.id}`]);
+                return (
+                  <Tooltip title={label} key={`settings:${item.id}`}>
+                    <button
+                      aria-label={label}
+                      onClick={() => openSettingsSection(item.id)}
+                      style={{ ...titlebarChipBase }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = token.colorPrimaryBg;
+                        e.currentTarget.style.borderColor = token.colorPrimaryBorder;
+                        e.currentTarget.style.color = token.colorPrimary;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = token.colorBgContainer;
+                        e.currentTarget.style.borderColor = token.colorBorderSecondary;
+                        e.currentTarget.style.color = token.colorTextSecondary;
+                      }}
+                    >
+                      {SETTINGS_SECTION_ICONS[item.id]}
+                    </button>
+                  </Tooltip>
+                );
+              }
 
-        {/* Settings Toggle */}
-        <Tooltip title={`${isInSettings ? t('settings.closeSettings') : t('settings.openSettings')} (${formatShortcutForDisplay(getShortcutBinding(settings, 'openSettings'))})`}>
-        <button
-          onClick={(e) => {
-            handleSettingsToggle();
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.blur();
-          }}
-          style={{
-            ...buttonBase,
-            color: isInSettings ? token.colorError : token.colorTextSecondary,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = isInSettings
-              ? token.colorErrorBg
-              : token.colorFillSecondary;
-            e.currentTarget.style.color = isInSettings
-              ? token.colorError
-              : token.colorTextBase;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = isInSettings
-              ? token.colorError
-              : token.colorTextSecondary;
-          }}
-        >
-          {isInSettings ? <XCircle size={14} /> : <Settings size={14} />}
-        </button>
-        </Tooltip>
-      </div>
-
-      {/* Windows window controls */}
-      {IS_WINDOWS && isTauri() && (
-        <div className="title-bar-nodrag" style={{ display: 'flex', alignItems: 'center', marginLeft: 4 }}>
-          {/* Minimize */}
-          <button
-            onClick={handleWindowMinimize}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 46,
-              height: 36,
-              border: 'none',
-              background: 'transparent',
-              color: token.colorTextSecondary,
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = token.colorFillSecondary; e.currentTarget.style.color = token.colorTextBase; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = token.colorTextSecondary; }}
-          >
-            <Minus size={16} />
-          </button>
-          {/* Maximize / Restore */}
-          <button
-            onClick={handleWindowMaximize}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 46,
-              height: 36,
-              border: 'none',
-              background: 'transparent',
-              color: token.colorTextSecondary,
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = token.colorFillSecondary; e.currentTarget.style.color = token.colorTextBase; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = token.colorTextSecondary; }}
-          >
-            {isMaximized ? <RestoreIcon /> : <Square size={14} />}
-          </button>
-          {/* Close */}
-          <button
-            onClick={handleWindowClose}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 46,
-              height: 36,
-              border: 'none',
-              background: 'transparent',
-              color: token.colorTextSecondary,
-              cursor: 'pointer',
-              outline: 'none',
-              borderRadius: 0,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#e81123'; e.currentTarget.style.color = '#ffffff'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = token.colorTextSecondary; }}
-          >
-            <X size={16} />
-          </button>
+              return actionRenderers[item.id];
+            });
+          })()}
         </div>
-      )}
+
+        {IS_WINDOWS && isTauri() && (
+          <div className="title-bar-nodrag" style={{ display: 'flex', alignItems: 'center', marginLeft: 4 }}>
+            <button
+              onClick={handleWindowMinimize}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 46, height: 36, border: 'none', background: 'transparent', color: token.colorTextSecondary, cursor: 'pointer', outline: 'none' }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = token.colorFillSecondary; e.currentTarget.style.color = token.colorTextBase; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = token.colorTextSecondary; }}
+            >
+              <Minus size={16} />
+            </button>
+            <button
+              onClick={handleWindowMaximize}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 46, height: 36, border: 'none', background: 'transparent', color: token.colorTextSecondary, cursor: 'pointer', outline: 'none' }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = token.colorFillSecondary; e.currentTarget.style.color = token.colorTextBase; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = token.colorTextSecondary; }}
+            >
+              {isMaximized ? <RestoreIcon /> : <Square size={14} />}
+            </button>
+            <button
+              onClick={handleWindowClose}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 46, height: 36, border: 'none', background: 'transparent', color: token.colorTextSecondary, cursor: 'pointer', outline: 'none', borderRadius: 0 }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#e81123'; e.currentTarget.style.color = '#ffffff'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = token.colorTextSecondary; }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

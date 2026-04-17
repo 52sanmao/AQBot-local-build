@@ -1,7 +1,86 @@
 import { create } from 'zustand';
 import { invoke } from '@/lib/invoke';
-import type { AppSettings } from '@/types';
+import type {
+  AppSettings,
+  BuiltinSettingsSidebarItemId,
+  BuiltinTitlebarActionId,
+  TitlebarQuickActionConfig,
+} from '@/types';
 import { DEFAULT_SHORTCUT_BINDINGS } from '@/lib/shortcuts';
+
+export const DEFAULT_SETTINGS_SECTION_IDS: BuiltinSettingsSidebarItemId[] = [
+  'general',
+  'display',
+  'providers',
+  'conversationSettings',
+  'defaultModel',
+  'searchProviders',
+  'mcpServers',
+  'proxy',
+  'shortcuts',
+  'data',
+  'storage',
+  'backup',
+  'about',
+];
+
+export const DEFAULT_TITLEBAR_QUICK_ACTIONS: TitlebarQuickActionConfig[] = [
+  { kind: 'builtin-action', id: 'pin', visible: true },
+  { kind: 'builtin-action', id: 'theme', visible: true },
+  { kind: 'builtin-action', id: 'language', visible: true },
+  { kind: 'builtin-action', id: 'backup', visible: true },
+  { kind: 'builtin-action', id: 'github', visible: true },
+  { kind: 'builtin-action', id: 'update', visible: true },
+  { kind: 'builtin-action', id: 'reload', visible: true },
+  { kind: 'builtin-action', id: 'settings', visible: true },
+];
+
+const DEFAULT_SIDEBAR_IDS = new Set<BuiltinSettingsSidebarItemId>(DEFAULT_SETTINGS_SECTION_IDS);
+const DEFAULT_TITLEBAR_KEYS = new Set<string>(
+  DEFAULT_TITLEBAR_QUICK_ACTIONS.map((item) => `${item.kind}:${item.id}`),
+);
+
+export function normalizeTitlebarQuickActions(
+  saved?: TitlebarQuickActionConfig[],
+): TitlebarQuickActionConfig[] {
+  const source = saved ?? DEFAULT_TITLEBAR_QUICK_ACTIONS;
+  const resolved: TitlebarQuickActionConfig[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of source as Array<TitlebarQuickActionConfig & { kind?: string }>) {
+    const normalized: TitlebarQuickActionConfig =
+      raw.kind === 'settings-section'
+        ? {
+            kind: 'settings-section',
+            id: raw.id as BuiltinSettingsSidebarItemId,
+            visible: raw.visible !== false,
+          }
+        : {
+            kind: 'builtin-action',
+            id: raw.id as BuiltinTitlebarActionId,
+            visible: raw.visible !== false,
+          };
+
+    const key = `${normalized.kind}:${normalized.id}`;
+    if (
+      (normalized.kind === 'builtin-action' && !DEFAULT_TITLEBAR_KEYS.has(key)) ||
+      (normalized.kind === 'settings-section' && !DEFAULT_SIDEBAR_IDS.has(normalized.id))
+    ) {
+      continue;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    resolved.push(normalized);
+  }
+
+  for (const fallback of DEFAULT_TITLEBAR_QUICK_ACTIONS) {
+    const key = `${fallback.kind}:${fallback.id}`;
+    if (seen.has(key)) continue;
+    resolved.push(fallback);
+  }
+
+  return resolved;
+}
 
 const DEFAULT_SETTINGS: AppSettings = {
   language: 'zh-CN',
@@ -84,7 +163,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   chat_minimap_style: 'faq',
   multi_model_display_mode: 'tabs',
   render_user_markdown: false,
-  // WebDAV sync settings — must be present so stale saves never omit them
+  titlebar_quick_actions: DEFAULT_TITLEBAR_QUICK_ACTIONS,
   webdav_host: null,
   webdav_username: null,
   webdav_path: null,
@@ -115,7 +194,6 @@ export interface GlobalShortcutStatus {
 interface SettingsState {
   settings: AppSettings;
   loading: boolean;
-  /** Set once after the first successful fetchSettings; guards saveSettings from writing stale data. */
   _loaded: boolean;
   error: string | null;
   globalShortcutStatus: GlobalShortcutStatus;
@@ -140,7 +218,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ loading: true });
     try {
       const fetched = await invoke<Partial<AppSettings>>('get_settings');
-      set({ settings: { ...DEFAULT_SETTINGS, ...fetched }, loading: false, _loaded: true, error: null });
+      set({
+        settings: {
+          ...DEFAULT_SETTINGS,
+          ...fetched,
+          titlebar_quick_actions: normalizeTitlebarQuickActions(fetched.titlebar_quick_actions),
+        },
+        loading: false,
+        _loaded: true,
+        error: null,
+      });
     } catch (e) {
       set({ error: String(e), loading: false, _loaded: true });
     }
@@ -151,7 +238,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       console.warn('[settingsStore] saveSettings skipped: settings not loaded yet');
       return;
     }
-    const merged = { ...get().settings, ...partial };
+    const merged = {
+      ...get().settings,
+      ...partial,
+      titlebar_quick_actions: normalizeTitlebarQuickActions(
+        partial.titlebar_quick_actions ?? get().settings.titlebar_quick_actions,
+      ),
+    };
     set({ settings: merged, error: null });
     try {
       await invoke('save_settings', { settings: merged });

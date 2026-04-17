@@ -208,6 +208,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [keyModalMode, setKeyModalMode] = useState<KeyModalMode>('add');
   const [activeKeyId, setActiveKeyId] = useState<string | null>(null);
   const [keyValue, setKeyValue] = useState('');
+  const [keyRemark, setKeyRemark] = useState('');
   const [keyModalLoading, setKeyModalLoading] = useState(false);
   const [keyModalSubmitting, setKeyModalSubmitting] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Record<string, string>>({});
@@ -410,6 +411,16 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     [provider?.models, modelSearch],
   );
 
+  const failedModelIds = useMemo(
+    () =>
+      new Set(
+        Array.from(testResults.entries())
+          .filter(([, result]) => Boolean(result.error))
+          .map(([modelId]) => modelId),
+      ),
+    [testResults],
+  );
+
   const handleOpenAddModel = useCallback((groupName?: string) => {
     setAddModelId('');
     setAddModelName('');
@@ -425,6 +436,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     setKeyModalMode('add');
     setActiveKeyId(null);
     setKeyValue('');
+    setKeyRemark('');
     setKeyModalLoading(false);
     setKeyModalSubmitting(false);
   }, []);
@@ -433,6 +445,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     setKeyModalMode('add');
     setActiveKeyId(null);
     setKeyValue('');
+    setKeyRemark('');
     setKeyModalLoading(false);
     setKeyModalOpen(true);
   }, []);
@@ -484,7 +497,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     setKeyModalSubmitting(true);
     try {
       if (keyModalMode === 'add') {
-        await addProviderKey(providerId, nextValue);
+        await addProviderKey(providerId, nextValue, keyRemark.trim() || null);
       } else if (keyModalMode === 'edit' && activeKeyId) {
         await updateProviderKey(activeKeyId, nextValue);
         setRevealedKeys((prev) => ({ ...prev, [activeKeyId]: nextValue }));
@@ -495,7 +508,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     } finally {
       setKeyModalSubmitting(false);
     }
-  }, [activeKeyId, addProviderKey, keyModalLoading, keyModalMode, keyValue, message, providerId, resetKeyModal, t, updateProviderKey]);
+  }, [activeKeyId, addProviderKey, keyModalLoading, keyModalMode, keyRemark, keyValue, message, providerId, resetKeyModal, t, updateProviderKey]);
 
   const handleValidateKey = useCallback(
     async (keyId: string) => {
@@ -793,6 +806,35 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     }
   }, [batchSelected, provider?.models, providerId, saveModels, message, t]);
 
+  const handleBatchSelectAllFiltered = useCallback(() => {
+    setBatchSelected(new Set(filteredModels.map((model) => model.model_id)));
+  }, [filteredModels]);
+
+  const handleBatchClearSelection = useCallback(() => {
+    setBatchSelected(new Set());
+  }, []);
+
+  const handleDeleteFailedModels = useCallback(async () => {
+    if (failedModelIds.size === 0) return;
+    const updatedModels = (provider?.models ?? []).filter((m) => !failedModelIds.has(m.model_id));
+    try {
+      await saveModels(providerId, updatedModels);
+      message.success(t('settings.deleteFailedModelsSuccess', { count: failedModelIds.size }));
+      setBatchSelected((prev) => {
+        const next = new Set(prev);
+        for (const modelId of failedModelIds) next.delete(modelId);
+        return next;
+      });
+      setTestResults((prev) => {
+        const next = new Map(prev);
+        for (const modelId of failedModelIds) next.delete(modelId);
+        return next;
+      });
+    } catch {
+      message.error(t('error.saveFailed'));
+    }
+  }, [failedModelIds, message, provider?.models, providerId, saveModels, t]);
+
   const handleOpenBatchEdit = useCallback(() => {
     // Reset all batch edit fields and disable all toggles
     setBatchModelType('Chat');
@@ -1038,6 +1080,11 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                     onChange={(checked) => toggleProviderKey(key.id, checked)}
                   />
                   <Key size={14} />
+                  {key.remark && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {key.remark}
+                    </Text>
+                  )}
                   <Text code style={{ wordBreak: 'break-all' }}>
                     {revealedKeys[key.id] ?? `${key.key_prefix}••••••••`}
                   </Text>
@@ -1181,6 +1228,27 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
         extra={
           batchMode ? (
             <Space size={4}>
+              <Tooltip title={t('common.selectAll')}>
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label={t('common.selectAll')}
+                  icon={<ListChecks size={14} />}
+                  disabled={filteredModels.length === 0}
+                  onClick={handleBatchSelectAllFiltered}
+                />
+              </Tooltip>
+              <Tooltip title={t('common.clearSelection')}>
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label={t('common.clearSelection')}
+                  icon={<X size={14} />}
+                  disabled={batchSelected.size === 0}
+                  onClick={handleBatchClearSelection}
+                />
+              </Tooltip>
+              <Divider type="vertical" style={{ margin: '0 2px' }} />
               <Tooltip title={t('settings.batchEnable')}>
                 <Button type="text" size="small" icon={<Power size={14} />} disabled={batchSelected.size === 0} onClick={handleBatchEnable} />
               </Tooltip>
@@ -1226,6 +1294,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
               <Button
                 type="text"
                 size="small"
+                aria-label={t('settings.batchEditMode')}
                 icon={<ListChecks size={14} />}
                 onClick={handleEnterBatchMode}
               />
@@ -1270,9 +1339,28 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                 trigger={['click']}
               >
                 <Tooltip title={t('settings.testModels')}>
-                  <Button type="text" size="small" icon={<Heart size={14} />} />
+                  <Button type="text" size="small" aria-label={t('settings.testModels')} icon={<Heart size={14} />} />
                 </Tooltip>
               </Dropdown>
+            <Popconfirm
+              title={t('settings.deleteFailedModelsConfirm', { count: failedModelIds.size })}
+              onConfirm={handleDeleteFailedModels}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+              okButtonProps={{ danger: true }}
+              disabled={failedModelIds.size === 0}
+            >
+              <Tooltip title={t('settings.deleteFailedModels')}>
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label={t('settings.deleteFailedModels')}
+                  danger
+                  disabled={failedModelIds.size === 0}
+                  icon={<Trash2 size={14} />}
+                />
+              </Tooltip>
+            </Popconfirm>
             <Tooltip title={allExpanded ? t('common.collapseAll') : t('common.expandAll')}>
               <Button
                 type="text"
@@ -1622,11 +1710,21 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
             <Spin size="small" />
           </div>
         ) : (
-          <Input
-            value={keyValue}
-            onChange={(e) => setKeyValue(e.target.value)}
-            placeholder="sk-..."
-          />
+          <>
+            <Input
+              value={keyValue}
+              onChange={(e) => setKeyValue(e.target.value)}
+              placeholder="sk-..."
+              style={{ marginBottom: keyModalMode === 'add' ? 12 : 0 }}
+            />
+            {keyModalMode === 'add' ? (
+              <Input
+                value={keyRemark}
+                onChange={(e) => setKeyRemark(e.target.value)}
+                placeholder={t('settings.keyRemarkOptional')}
+              />
+            ) : null}
+          </>
         )}
       </Modal>
 

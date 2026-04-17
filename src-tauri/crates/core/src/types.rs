@@ -52,6 +52,7 @@ pub struct ProviderKey {
     pub last_validated_at: Option<i64>,
     pub last_error: Option<String>,
     pub rotation_index: u32,
+    pub remark: Option<String>,
     pub created_at: i64,
 }
 
@@ -542,6 +543,13 @@ pub enum LoadBalanceStrategy {
 // === Settings ===
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TitlebarQuickActionConfig {
+    pub kind: String,
+    pub id: String,
+    pub visible: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
     pub language: String,
@@ -644,6 +652,7 @@ pub struct AppSettings {
     pub multi_model_display_mode: String,
     /// Render user messages as Markdown (like AI messages). Default: false.
     pub render_user_markdown: bool,
+    pub titlebar_quick_actions: Vec<TitlebarQuickActionConfig>,
 }
 
 impl Default for AppSettings {
@@ -741,6 +750,48 @@ impl Default for AppSettings {
             chat_minimap_style: "faq".to_string(),
             multi_model_display_mode: "tabs".to_string(),
             render_user_markdown: false,
+            titlebar_quick_actions: vec![
+                TitlebarQuickActionConfig {
+                    kind: "builtin-action".to_string(),
+                    id: "pin".to_string(),
+                    visible: true,
+                },
+                TitlebarQuickActionConfig {
+                    kind: "builtin-action".to_string(),
+                    id: "theme".to_string(),
+                    visible: true,
+                },
+                TitlebarQuickActionConfig {
+                    kind: "builtin-action".to_string(),
+                    id: "language".to_string(),
+                    visible: true,
+                },
+                TitlebarQuickActionConfig {
+                    kind: "builtin-action".to_string(),
+                    id: "backup".to_string(),
+                    visible: true,
+                },
+                TitlebarQuickActionConfig {
+                    kind: "builtin-action".to_string(),
+                    id: "github".to_string(),
+                    visible: true,
+                },
+                TitlebarQuickActionConfig {
+                    kind: "builtin-action".to_string(),
+                    id: "update".to_string(),
+                    visible: true,
+                },
+                TitlebarQuickActionConfig {
+                    kind: "builtin-action".to_string(),
+                    id: "reload".to_string(),
+                    visible: true,
+                },
+                TitlebarQuickActionConfig {
+                    kind: "builtin-action".to_string(),
+                    id: "settings".to_string(),
+                    visible: true,
+                },
+            ],
         }
     }
 }

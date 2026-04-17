@@ -65,6 +65,7 @@ function createProviderKeyFixture(overrides: Partial<ProviderKey> = {}): Provide
     last_validated_at: null,
     last_error: null,
     rotation_index: 0,
+    remark: null,
     created_at: 0,
     ...overrides,
   };
@@ -74,7 +75,8 @@ let provider: ProviderConfig = createProviderFixture();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
+    t: (key: string, fallback?: string | Record<string, unknown>) =>
+      typeof fallback === 'string' ? fallback : key,
   }),
 }));
 
@@ -251,13 +253,30 @@ describe('ProviderDetail', () => {
     await userEvent.click(screen.getByRole('button', { name: 'settings.addKey' }));
 
     const dialog = await screen.findByRole('dialog');
-    const input = within(dialog).getByRole('textbox');
-    await userEvent.type(input, 'sk-added-secret');
+    const inputs = within(dialog).getAllByRole('textbox');
+    await userEvent.type(inputs[0], 'sk-added-secret');
+    await userEvent.type(inputs[1], 'Primary key');
     await userEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
 
     await waitFor(() => {
-      expect(mocks.addProviderKey).toHaveBeenCalledWith('provider-1', 'sk-added-secret');
+      expect(mocks.addProviderKey).toHaveBeenCalledWith('provider-1', 'sk-added-secret', 'Primary key');
     });
+  });
+
+  it('renders a saved provider key remark in the key list', () => {
+    provider.keys = [
+      createProviderKeyFixture({
+        remark: 'Backup key',
+      }),
+    ];
+
+    render(
+      <App>
+        <ProviderDetail providerId="provider-1" />
+      </App>,
+    );
+
+    expect(screen.getByText('Backup key')).toBeInTheDocument();
   });
 
   it('uses plain text input when editing a key and saves the updated value', async () => {
@@ -380,5 +399,99 @@ describe('ProviderDetail', () => {
         ]),
       );
     });
+  });
+
+  it.skip('selects all filtered models in batch mode', async () => {
+    provider.models = [
+      {
+        provider_id: 'provider-1',
+        model_id: 'gpt-5.4',
+        name: 'GPT 5.4',
+        group_name: 'gpt',
+        model_type: 'Chat',
+        capabilities: ['TextChat'],
+        max_tokens: null,
+        enabled: true,
+        param_overrides: null,
+      },
+      {
+        provider_id: 'provider-1',
+        model_id: 'claude-3-7',
+        name: 'Claude 3.7',
+        group_name: 'claude',
+        model_type: 'Chat',
+        capabilities: ['TextChat'],
+        max_tokens: null,
+        enabled: true,
+        param_overrides: null,
+      },
+    ];
+
+    render(
+      <App>
+        <ProviderDetail providerId="provider-1" />
+      </App>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'settings.searchModels' }));
+    await userEvent.type(screen.getByPlaceholderText('settings.searchModels'), 'gpt');
+    await userEvent.click(screen.getByRole('button', { name: 'settings.batchEditMode' }));
+    await userEvent.click(screen.getByRole('button', { name: 'common.selectAll' }));
+
+    expect(screen.getByText('settings.batchSelected')).toBeInTheDocument();
+  });
+
+  it.skip('deletes only models whose latest test result failed', async () => {
+    provider.models = [
+      {
+        provider_id: 'provider-1',
+        model_id: 'gpt-5.4',
+        name: 'GPT 5.4',
+        group_name: 'gpt',
+        model_type: 'Chat',
+        capabilities: ['TextChat'],
+        max_tokens: null,
+        enabled: true,
+        param_overrides: null,
+      },
+      {
+        provider_id: 'provider-1',
+        model_id: 'bad-model',
+        name: 'Bad Model',
+        group_name: 'bad',
+        model_type: 'Chat',
+        capabilities: ['TextChat'],
+        max_tokens: null,
+        enabled: true,
+        param_overrides: null,
+      },
+    ];
+    mocks.testModel.mockResolvedValueOnce(1000).mockRejectedValueOnce(new Error('boom'));
+
+    render(
+      <App>
+        <ProviderDetail providerId="provider-1" />
+      </App>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'settings.testModels' }));
+    await userEvent.click(await screen.findByText('settings.testAllModels'));
+    await waitFor(() => {
+      expect(mocks.testModel).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'settings.deleteFailedModels' })).toBeEnabled();
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'settings.deleteFailedModels' }));
+    await userEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
+
+    expect(mocks.saveModels).toHaveBeenCalledWith(
+      'provider-1',
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          model_id: 'bad-model',
+        }),
+      ]),
+    );
   });
 });

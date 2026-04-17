@@ -15,6 +15,7 @@ fn key_from_entity(m: provider_keys::Model) -> ProviderKey {
         last_validated_at: m.last_validated_at,
         last_error: m.last_error,
         rotation_index: m.rotation_index as u32,
+        remark: m.remark,
         created_at: m.created_at,
     }
 }
@@ -34,6 +35,7 @@ pub async fn add_provider_key(
     provider_id: &str,
     key_encrypted: &str,
     key_prefix: &str,
+    remark: Option<String>,
 ) -> Result<ProviderKey> {
     let id = gen_id();
     let now = now_ts();
@@ -57,6 +59,7 @@ pub async fn add_provider_key(
         last_validated_at: Set(None),
         last_error: Set(None),
         rotation_index: Set(rotation_index),
+        remark: Set(remark),
         created_at: Set(now),
     }
     .insert(db)

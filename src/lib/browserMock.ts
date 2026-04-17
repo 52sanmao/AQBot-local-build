@@ -311,7 +311,7 @@ export async function handleCommand<T>(cmd: string, args?: Record<string, unknow
       return undefined as T;
     }
     case 'add_provider_key': {
-      const { providerId, rawKey } = args as any;
+      const { providerId, rawKey, remark } = args as any;
       const key = {
         id: genId(),
         provider_id: providerId,
@@ -321,6 +321,7 @@ export async function handleCommand<T>(cmd: string, args?: Record<string, unknow
         last_validated_at: null,
         last_error: null,
         rotation_index: 0,
+        remark: remark ?? null,
         created_at: nowTs(),
       };
       const providers = getStore<any[]>('providers', []);

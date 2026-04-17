@@ -3,10 +3,19 @@ import { Sun, Moon, Monitor } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { useSettingsStore } from '@/stores';
+import {
+  DEFAULT_SETTINGS_SECTION_IDS,
+  normalizeTitlebarQuickActions,
+} from '@/stores/settingsStore';
 import { invoke, isTauri } from '@/lib/invoke';
 import { SHIKI_LIGHT_THEMES, SHIKI_DARK_THEMES, formatThemeName } from '@/constants/codeThemes';
 import { SettingsGroup } from './SettingsGroup';
 import { SettingsSelect } from './SettingsSelect';
+import { TitlebarSettingsShortcutEditor } from './TitlebarSettingsShortcutEditor';
+import type {
+  BuiltinSettingsSidebarItemId,
+  TitlebarQuickActionConfig,
+} from '@/types';
 
 export function DisplaySettings() {
   const { t } = useTranslation();
@@ -29,6 +38,41 @@ export function DisplaySettings() {
     () => SHIKI_DARK_THEMES.map((id) => ({ label: formatThemeName(id), value: id })),
     [],
   );
+
+  const titlebarActions = normalizeTitlebarQuickActions(settings.titlebar_quick_actions);
+
+  const settingsShortcutOptions = useMemo(
+    () =>
+      DEFAULT_SETTINGS_SECTION_IDS.map((id) => ({
+        id,
+        config: { kind: 'settings-section', id, visible: false } as TitlebarQuickActionConfig,
+        label: t([`settings.${id}.title`, `settings.${id}`]),
+      })),
+    [t],
+  );
+
+  const selectedShortcutIds = useMemo(
+    () =>
+      titlebarActions
+        .filter((item): item is Extract<TitlebarQuickActionConfig, { kind: 'settings-section' }> =>
+          item.kind === 'settings-section' && item.visible,
+        )
+        .map((item) => item.id),
+    [titlebarActions],
+  );
+
+  const buildTitlebarConfig = (selectedIds: BuiltinSettingsSidebarItemId[]): TitlebarQuickActionConfig[] => {
+    const selectedSet = new Set(selectedIds);
+    const builtinItems = titlebarActions.filter((item) => item.kind === 'builtin-action');
+
+    return [
+      ...builtinItems,
+      ...selectedIds.map((id) => ({ kind: 'settings-section', id, visible: true }) as TitlebarQuickActionConfig),
+      ...settingsShortcutOptions
+        .filter((item) => !selectedSet.has(item.id))
+        .map((item) => ({ ...item.config, visible: false })),
+    ];
+  };
 
   return (
     <div className="p-6 pb-12">
@@ -63,26 +107,21 @@ export function DisplaySettings() {
                   borderRadius: '50%',
                   backgroundColor: color,
                   cursor: 'pointer',
-                  border: settings.primary_color === color
-                    ? '2px solid currentColor'
-                    : '2px solid transparent',
-                  boxShadow: settings.primary_color === color
-                    ? `0 0 0 1px ${color}`
-                    : 'none',
+                  border: settings.primary_color === color ? '2px solid currentColor' : '2px solid transparent',
+                  boxShadow: settings.primary_color === color ? `0 0 0 1px ${color}` : 'none',
                   transition: 'all 0.2s',
                 }}
               />
             ))}
             <ColorPicker
               value={settings.primary_color}
-              onChangeComplete={(color) =>
-                saveSettings({ primary_color: color.toHexString() })
-              }
+              onChangeComplete={(color) => saveSettings({ primary_color: color.toHexString() })}
               size="small"
             />
           </div>
         </div>
       </SettingsGroup>
+
       <SettingsGroup title={t('settings.groupFontRadius')}>
         <div style={{ padding: '4px 0' }}>
           <span>{t('settings.fontSize')}</span>
@@ -113,10 +152,7 @@ export function DisplaySettings() {
             searchable
             value={settings.font_family || ''}
             onChange={(val) => saveSettings({ font_family: val })}
-            options={[
-              { label: t('settings.fontDefault'), value: '' },
-              ...systemFonts.map((f) => ({ label: f, value: f })),
-            ]}
+            options={[{ label: t('settings.fontDefault'), value: '' }, ...systemFonts.map((f) => ({ label: f, value: f }))]}
           />
         </div>
         <Divider style={{ margin: '4px 0' }} />
@@ -126,10 +162,7 @@ export function DisplaySettings() {
             searchable
             value={settings.code_font_family || ''}
             onChange={(val) => saveSettings({ code_font_family: val })}
-            options={[
-              { label: t('settings.fontDefault'), value: '' },
-              ...systemFonts.map((f) => ({ label: f, value: f })),
-            ]}
+            options={[{ label: t('settings.fontDefault'), value: '' }, ...systemFonts.map((f) => ({ label: f, value: f }))]}
           />
         </div>
         <Divider style={{ margin: '4px 0' }} />
@@ -163,6 +196,24 @@ export function DisplaySettings() {
             marks={{ 0: '0', 4: '4', 8: '8', 12: '12', 16: '16', 20: '20' }}
           />
         </div>
+      </SettingsGroup>
+
+      <SettingsGroup title={t('settings.titlebarSettingsShortcuts')}>
+        <TitlebarSettingsShortcutEditor
+          description={t('settings.entryShelf.settingsShortcutDescription')}
+          allTitle={t('settings.entryShelf.allSettingsEntries')}
+          orderTitle={t('settings.entryShelf.selectedOrder')}
+          selectedLabel={t('settings.entryShelf.selectedBadge')}
+          allOptions={settingsShortcutOptions.map(({ id, label }) => ({ id, label }))}
+          selectedIds={selectedShortcutIds}
+          onToggle={(id) => {
+            const next = selectedShortcutIds.includes(id)
+              ? selectedShortcutIds.filter((current) => current !== id)
+              : [...selectedShortcutIds, id];
+            saveSettings({ titlebar_quick_actions: buildTitlebarConfig(next) });
+          }}
+          onReorder={(ids) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig(ids) })}
+        />
       </SettingsGroup>
     </div>
   );

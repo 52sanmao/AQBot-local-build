@@ -88,18 +88,29 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Disable updater signing for test build
+        shell: pwsh
+        run: |
+          $configPath = "src-tauri/tauri.conf.json"
+          $config = Get-Content -Path $configPath -Raw | ConvertFrom-Json
+          $config.bundle.createUpdaterArtifacts = $false
+          if ($null -ne $config.plugins -and $null -ne $config.plugins.updater) {
+            $config.plugins.updater.pubkey = ""
+            $config.plugins.updater.endpoints = @()
+          }
+          $config | ConvertTo-Json -Depth 100 | Set-Content -Path $configPath -Encoding UTF8
+
       - name: Build with Tauri
         uses: tauri-apps/tauri-action@v0
         env:
           NODE_OPTIONS: '--max_old_space_size=4096'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'AQBot Test ${{ github.ref_name }}'
           releaseDraft: true
           prerelease: true
+          includeUpdaterJson: false
           tauriScript: pnpm tauri
           args: --target x86_64-pc-windows-msvc
 
