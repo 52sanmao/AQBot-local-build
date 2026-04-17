@@ -10,7 +10,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(ProviderKeys::Table)
-                    .add_column(ColumnDef::new(ProviderKeys::Remark).string().null())
+                    .add_column(ColumnDef::new(ProviderKeys::Remark).string())
                     .to_owned(),
             )
             .await?;
