@@ -888,16 +888,16 @@
     "batchEditHint": "開啟右側開關的選項將被應用到所有選中的模型",
     "batchApply": "應用",
     "batchEditSuccess": "已更新 {{count}} 個模型的設置",
-    "keyRemarkOptional": "????????",
-    "deleteFailedModels": "??????",
-    "deleteFailedModelsConfirm": "?????????????????????",
-    "deleteFailedModelsSuccess": "??? {{count}} ?????",
-    "titlebarSettingsShortcuts": "?????????",
+    "keyRemarkOptional": "金鑰備註（可選）",
+    "deleteFailedModels": "刪除失敗模型",
+    "deleteFailedModelsConfirm": "確認刪除最近一次測試失敗的 {{count}} 個模型嗎？",
+    "deleteFailedModelsSuccess": "已刪除 {{count}} 個失敗模型",
+    "titlebarSettingsShortcuts": "標題欄設定入口",
     "entryShelf": {
-      "allSettingsEntries": "????????",
-      "selectedOrder": "???????",
-      "selectedBadge": "???",
-      "settingsShortcutDescription": "????????????????????"
+      "allSettingsEntries": "可加入設定頁",
+      "selectedOrder": "已加入順序",
+      "selectedBadge": "已加入",
+      "settingsShortcutDescription": "點擊氣泡即可將設定頁入口加入或移出標題欄。"
     }
   },
   "backup": {

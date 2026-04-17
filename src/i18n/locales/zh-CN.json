@@ -888,16 +888,16 @@
     "batchEditHint": "开启右侧开关的选项将被应用到所有选中的模型",
     "batchApply": "应用",
     "batchEditSuccess": "已更新 {{count}} 个模型的设置",
-    "keyRemarkOptional": "????????",
-    "deleteFailedModels": "??????",
-    "deleteFailedModelsConfirm": "?????????????????????",
-    "deleteFailedModelsSuccess": "??? {{count}} ?????",
-    "titlebarSettingsShortcuts": "?????????",
+    "keyRemarkOptional": "密钥备注（可选）",
+    "deleteFailedModels": "删除失败模型",
+    "deleteFailedModelsConfirm": "确认删除最近一次测试失败的 {{count}} 个模型吗？",
+    "deleteFailedModelsSuccess": "已删除 {{count}} 个失败模型",
+    "titlebarSettingsShortcuts": "标题栏设置入口",
     "entryShelf": {
-      "allSettingsEntries": "????????",
-      "selectedOrder": "???????",
-      "selectedBadge": "???",
-      "settingsShortcutDescription": "????????????????????"
+      "allSettingsEntries": "可加入设置页",
+      "selectedOrder": "已加入顺序",
+      "selectedBadge": "已加入",
+      "settingsShortcutDescription": "点击气泡即可将设置页入口加入或移出标题栏。"
     }
   },
   "backup": {
