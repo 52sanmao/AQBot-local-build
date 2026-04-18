@@ -7,12 +7,8 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .alter_table(
-                Table::alter()
-                    .table(ProviderKeys::Table)
-                    .add_column(ColumnDef::new(ProviderKeys::Remark).string())
-                    .to_owned(),
-            )
+            .get_connection()
+            .execute_unprepared("ALTER TABLE provider_keys ADD COLUMN remark TEXT")
             .await?;
 
         Ok(())
@@ -20,12 +16,8 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .alter_table(
-                Table::alter()
-                    .table(ProviderKeys::Table)
-                    .drop_column(ProviderKeys::Remark)
-                    .to_owned(),
-            )
+            .get_connection()
+            .execute_unprepared("ALTER TABLE provider_keys DROP COLUMN remark")
             .await?;
 
         Ok(())
