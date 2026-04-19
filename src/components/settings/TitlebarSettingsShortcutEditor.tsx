@@ -10,11 +10,17 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
-import type { BuiltinSettingsSidebarItemId } from '@/types';
 import { SETTINGS_SECTION_ICONS } from './settingsSectionMeta';
+import { TITLEBAR_ACTION_ICONS } from './titlebarQuickActionMeta';
+import type {
+  BuiltinSettingsSidebarItemId,
+  BuiltinTitlebarActionId,
+} from '@/types';
 
 interface ShortcutOption {
-  id: BuiltinSettingsSidebarItemId;
+  key: string;
+  kind: 'builtin-action' | 'settings-section';
+  id: BuiltinTitlebarActionId | BuiltinSettingsSidebarItemId;
   label: string;
 }
 
@@ -24,20 +30,24 @@ interface TitlebarSettingsShortcutEditorProps {
   orderTitle: string;
   selectedLabel: string;
   allOptions: ShortcutOption[];
-  selectedIds: BuiltinSettingsSidebarItemId[];
-  onToggle: (id: BuiltinSettingsSidebarItemId) => void;
-  onReorder: (ids: BuiltinSettingsSidebarItemId[]) => void;
+  selectedKeys: string[];
+  onToggle: (key: string) => void;
+  onReorder: (keys: string[]) => void;
 }
 
 function SortableSelectedChip({
-  id,
+  option,
   label,
 }: {
-  id: BuiltinSettingsSidebarItemId;
+  option: ShortcutOption;
   label: string;
 }) {
   const { token } = theme.useToken();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: option.key });
+  const icon =
+    option.kind === 'settings-section'
+      ? SETTINGS_SECTION_ICONS[option.id as BuiltinSettingsSidebarItemId]
+      : TITLEBAR_ACTION_ICONS[option.id as BuiltinTitlebarActionId];
 
   return (
     <div
@@ -68,12 +78,12 @@ function SortableSelectedChip({
           flex: 'none',
         }}
       >
-        {SETTINGS_SECTION_ICONS[id]}
+        {icon}
       </span>
       <span style={{ fontSize: 13 }}>{label}</span>
       <button
         type="button"
-        aria-label={`drag-${id}`}
+        aria-label={`drag-${option.key}`}
         {...attributes}
         {...listeners}
         style={{
@@ -100,22 +110,28 @@ export function TitlebarSettingsShortcutEditor({
   orderTitle,
   selectedLabel,
   allOptions,
-  selectedIds,
+  selectedKeys,
   onToggle,
   onReorder,
 }: TitlebarSettingsShortcutEditorProps) {
   const { token } = theme.useToken();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const selectedOptions = allOptions.filter((option) => selectedSet.has(option.id));
+  const selectedSet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
+  const optionMap = useMemo(
+    () => new Map(allOptions.map((option) => [option.key, option])),
+    [allOptions],
+  );
+  const selectedOptions = selectedKeys
+    .map((key) => optionMap.get(key))
+    .filter((option): option is ShortcutOption => Boolean(option));
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = selectedIds.indexOf(active.id as BuiltinSettingsSidebarItemId);
-    const newIndex = selectedIds.indexOf(over.id as BuiltinSettingsSidebarItemId);
+    const oldIndex = selectedKeys.indexOf(active.id as string);
+    const newIndex = selectedKeys.indexOf(over.id as string);
     if (oldIndex < 0 || newIndex < 0) return;
-    onReorder(arrayMove(selectedIds, oldIndex, newIndex));
+    onReorder(arrayMove(selectedKeys, oldIndex, newIndex));
   };
 
   return (
@@ -135,13 +151,17 @@ export function TitlebarSettingsShortcutEditor({
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {allOptions.map((option) => {
-            const selected = selectedSet.has(option.id);
+            const selected = selectedSet.has(option.key);
+            const icon =
+              option.kind === 'settings-section'
+                ? SETTINGS_SECTION_ICONS[option.id as BuiltinSettingsSidebarItemId]
+                : TITLEBAR_ACTION_ICONS[option.id as BuiltinTitlebarActionId];
             return (
               <button
-                key={option.id}
+                key={option.key}
                 type="button"
                 aria-label={option.label}
-                onClick={() => onToggle(option.id)}
+                onClick={() => onToggle(option.key)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -166,7 +186,7 @@ export function TitlebarSettingsShortcutEditor({
                     flex: 'none',
                   }}
                 >
-                  {SETTINGS_SECTION_ICONS[option.id]}
+                  {icon}
                 </span>
                 <span style={{ fontSize: 13 }}>{option.label}</span>
                 {selected ? <span style={{ fontSize: 11, color: token.colorPrimary }}>{selectedLabel}</span> : null}
@@ -188,10 +208,10 @@ export function TitlebarSettingsShortcutEditor({
         </div>
         {selectedOptions.length > 0 ? (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={selectedIds} strategy={horizontalListSortingStrategy}>
+            <SortableContext items={selectedKeys} strategy={horizontalListSortingStrategy}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {selectedOptions.map((option) => (
-                  <SortableSelectedChip key={option.id} id={option.id} label={option.label} />
+                  <SortableSelectedChip key={option.key} option={option} label={option.label} />
                 ))}
               </div>
             </SortableContext>

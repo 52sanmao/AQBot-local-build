@@ -12,8 +12,9 @@ import { SHIKI_LIGHT_THEMES, SHIKI_DARK_THEMES, formatThemeName } from '@/consta
 import { SettingsGroup } from './SettingsGroup';
 import { SettingsSelect } from './SettingsSelect';
 import { TitlebarSettingsShortcutEditor } from './TitlebarSettingsShortcutEditor';
+import { TITLEBAR_ACTION_LABEL_KEYS } from './titlebarQuickActionMeta';
 import type {
-  BuiltinSettingsSidebarItemId,
+  BuiltinTitlebarActionId,
   TitlebarQuickActionConfig,
 } from '@/types';
 
@@ -41,35 +42,47 @@ export function DisplaySettings() {
 
   const titlebarActions = normalizeTitlebarQuickActions(settings.titlebar_quick_actions);
 
-  const settingsShortcutOptions = useMemo(
+  const titlebarEditorOptions = useMemo(
     () =>
-      DEFAULT_SETTINGS_SECTION_IDS.map((id) => ({
-        id,
-        config: { kind: 'settings-section', id, visible: false } as TitlebarQuickActionConfig,
-        label: t([`settings.${id}.title`, `settings.${id}`]),
-      })),
+      [
+        ...normalizeTitlebarQuickActions([])
+          .filter((item): item is Extract<TitlebarQuickActionConfig, { kind: 'builtin-action' }> => item.kind === 'builtin-action')
+          .map((item) => ({
+            key: `${item.kind}:${item.id}`,
+            kind: item.kind,
+            id: item.id,
+            config: { ...item, visible: false } as TitlebarQuickActionConfig,
+            label: t(TITLEBAR_ACTION_LABEL_KEYS[item.id as BuiltinTitlebarActionId]),
+          })),
+        ...DEFAULT_SETTINGS_SECTION_IDS.map((id) => ({
+          key: `settings-section:${id}`,
+          kind: 'settings-section' as const,
+          id,
+          config: { kind: 'settings-section', id, visible: false } as TitlebarQuickActionConfig,
+          label: t([`settings.${id}.title`, `settings.${id}`]),
+        })),
+      ],
     [t],
   );
 
-  const selectedShortcutIds = useMemo(
+  const selectedTitlebarKeys = useMemo(
     () =>
       titlebarActions
-        .filter((item): item is Extract<TitlebarQuickActionConfig, { kind: 'settings-section' }> =>
-          item.kind === 'settings-section' && item.visible,
-        )
-        .map((item) => item.id),
+        .filter((item) => item.visible)
+        .map((item) => `${item.kind}:${item.id}`),
     [titlebarActions],
   );
 
-  const buildTitlebarConfig = (selectedIds: BuiltinSettingsSidebarItemId[]): TitlebarQuickActionConfig[] => {
-    const selectedSet = new Set(selectedIds);
-    const builtinItems = titlebarActions.filter((item) => item.kind === 'builtin-action');
-
+  const buildTitlebarConfig = (selectedKeys: string[]): TitlebarQuickActionConfig[] => {
+    const selectedSet = new Set(selectedKeys);
+    const optionMap = new Map(titlebarEditorOptions.map((option) => [option.key, option]));
     return [
-      ...builtinItems,
-      ...selectedIds.map((id) => ({ kind: 'settings-section', id, visible: true }) as TitlebarQuickActionConfig),
-      ...settingsShortcutOptions
-        .filter((item) => !selectedSet.has(item.id))
+      ...selectedKeys
+        .map((key) => optionMap.get(key))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .map((item) => ({ ...item.config, visible: true })),
+      ...titlebarEditorOptions
+        .filter((item) => !selectedSet.has(item.key))
         .map((item) => ({ ...item.config, visible: false })),
     ];
   };
@@ -204,15 +217,15 @@ export function DisplaySettings() {
           allTitle={t('settings.entryShelf.allSettingsEntries')}
           orderTitle={t('settings.entryShelf.selectedOrder')}
           selectedLabel={t('settings.entryShelf.selectedBadge')}
-          allOptions={settingsShortcutOptions.map(({ id, label }) => ({ id, label }))}
-          selectedIds={selectedShortcutIds}
-          onToggle={(id) => {
-            const next = selectedShortcutIds.includes(id)
-              ? selectedShortcutIds.filter((current) => current !== id)
-              : [...selectedShortcutIds, id];
+          allOptions={titlebarEditorOptions.map(({ key, kind, id, label }) => ({ key, kind, id, label }))}
+          selectedKeys={selectedTitlebarKeys}
+          onToggle={(key) => {
+            const next = selectedTitlebarKeys.includes(key)
+              ? selectedTitlebarKeys.filter((current) => current !== key)
+              : [...selectedTitlebarKeys, key];
             saveSettings({ titlebar_quick_actions: buildTitlebarConfig(next) });
           }}
-          onReorder={(ids) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig(ids) })}
+          onReorder={(keys) => saveSettings({ titlebar_quick_actions: buildTitlebarConfig(keys) })}
         />
       </SettingsGroup>
     </div>

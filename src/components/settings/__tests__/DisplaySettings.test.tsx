@@ -68,4 +68,21 @@ describe('DisplaySettings', () => {
       ]),
     );
   });
+
+  it('shows default builtin titlebar actions in selected order and lets users remove them', async () => {
+    render(<DisplaySettings />);
+
+    expect(screen.getAllByText('settings.openSettings').length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: /settings.openSettings/i }));
+
+    const [{ titlebar_quick_actions }] = saveSettings.mock.calls[0];
+
+    expect(titlebar_quick_actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'builtin-action', id: 'settings', visible: false }),
+        expect.objectContaining({ kind: 'settings-section', id: 'providers', visible: true }),
+      ]),
+    );
+  });
 });
